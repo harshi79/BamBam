@@ -11,6 +11,7 @@ from app.database.connection import get_pool
 from app.database.repositories import user_repo
 from app.keyboards.inline import back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
+from app.utils.formatting import build_leaderboard, build_leaderboard_empty
 
 
 def register(dp: Dispatcher):
@@ -22,12 +23,14 @@ def register(dp: Dispatcher):
             rows = await user_repo.get_top_generators(conn, 10)
 
         if not rows:
-            await message.answer(sc("🏆 no generations yet."), reply_markup=back_to_menu_kb())
+            await message.answer(build_leaderboard_empty(), reply_markup=back_to_menu_kb())
             return
 
-        lines = [sc_html("🏆 <b>top generators</b>\n")]
-        medals = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
-        for i, r in enumerate(rows):
-            name = esc(r["full_name"] or r["username"] or "Unknown")
-            lines.append(sc_html(f"{medals[i]} <b>{name}</b> — {r['total_generated']}"))
-        await message.answer("\n".join(lines), reply_markup=back_to_menu_kb())
+        entries = [
+            {
+                "name": r["full_name"] or r["username"] or "Unknown",
+                "total": r["total_generated"],
+            }
+            for r in rows
+        ]
+        await message.answer(build_leaderboard(entries), reply_markup=back_to_menu_kb())

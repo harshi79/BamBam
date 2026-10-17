@@ -14,12 +14,12 @@ from app.utils.formatting import (
 class TestWelcomeText:
     def test_contains_branding(self):
         text = build_welcome_text()
-        # sc_html converts lowercase to small-caps Unicode
-        assert "YoriNetflix" in text or "YᴏʀɪNᴇᴛꜰʟɪx" in text
+        # Branding appears as small-caps "yorinetflix" in the blockquote
+        assert "ʏᴏʀɪɴᴇᴛꜰʟɪx" in text or "YoriNetflix" in text or "yorinetflix" in text.lower()
 
-    def test_contains_button_hint(self):
+    def test_contains_welcome(self):
         text = build_welcome_text()
-        assert "button" in text or "ʙᴜᴛᴛᴏɴ" in text or "bᴜᴛᴛᴏɴ" in text
+        assert "welcome" in text or "ᴡᴇʟᴄᴏᴍᴇ" in text
 
 
 class TestProfileText:

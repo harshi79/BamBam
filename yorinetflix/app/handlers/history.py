@@ -14,6 +14,7 @@ from app.database.connection import get_pool
 from app.database.repositories import history_repo
 from app.keyboards.inline import history_nav_kb, back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
+from app.utils.formatting import build_history_empty, build_history_page
 
 
 def register(dp: Dispatcher):
@@ -50,17 +51,14 @@ def register(dp: Dispatcher):
 def _format_history(rows, total: int, page: int):
     per_page = 10
     if not rows:
-        text = sc_html("🕘 <b>your history is empty.</b>\n\ngenerate an account to see it here.")
-        return text, back_to_menu_kb()
+        return build_history_empty(), back_to_menu_kb()
 
     total_pages = max(1, ceil(total / per_page))
-    lines = [sc_html("🕘 <b>your recent generations</b>\n")]
+    entries = []
     for r in rows:
-        when = r["generated_at"].strftime("%Y-%m-%d %H:%M")
-        lines.append(sc_html(f"• <b>{esc(r['country'])}</b> — <i>{when} UTC</i>"))
-    lines.append(sc_html(
-        f"\n📄 page <b>{page}</b>/<b>{total_pages}</b> · total: <b>{total}</b>"
-    ))
-    text = "\n".join(lines)
+        when = r["generated_at"].strftime("%Y-%m-%d %H:%M") + " UTC"
+        entries.append({"country": r["country"], "when": when})
+
+    text = build_history_page(entries, page, total_pages, total)
     kb = history_nav_kb(page, total_pages)
     return text, kb

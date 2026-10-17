@@ -17,7 +17,9 @@ from app.database.repositories import user_repo, history_repo
 from app.services import inventory, limits
 from app.keyboards.inline import country_list_kb, cookie_action_kb, back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
-from app.utils.formatting import build_account_message
+from app.utils.formatting import (
+    build_account_message, build_country_list_text, build_country_empty,
+)
 
 log = logging.getLogger("yorinetflix.handlers.gen")
 
@@ -34,7 +36,7 @@ def register(dp: Dispatcher, settings: Settings):
         if not countries:
             try:
                 await callback.message.edit_text(
-                    sc("❌ no stock right now. check back later!"),
+                    build_country_empty(),
                     reply_markup=back_to_menu_kb(),
                     disable_web_page_preview=True,
                 )
@@ -44,11 +46,7 @@ def register(dp: Dispatcher, settings: Settings):
 
         total = sum(c["count"] for c in countries)
         kb = country_list_kb(countries, page, settings.PAGE_SIZE)
-        text = sc_html(
-            f"🌍 <b>select a country</b>\n\n"
-            f"📦 total in stock: <b>{total}</b>\n"
-            f"🗂 countries: <b>{len(countries)}</b>"
-        )
+        text = build_country_list_text(total, len(countries))
         try:
             await callback.message.edit_text(
                 text, reply_markup=kb, disable_web_page_preview=True
@@ -81,7 +79,7 @@ def register(dp: Dispatcher, settings: Settings):
                 )
                 if not cd_ok:
                     return await callback.answer(
-                        sc(f"⏳ wait {cd_remaining}s before generating again."),
+                        f"⏳ wait {cd_remaining}s before generating again.",
                         show_alert=True,
                     )
 
@@ -91,7 +89,7 @@ def register(dp: Dispatcher, settings: Settings):
                 )
                 if not dl_ok:
                     return await callback.answer(
-                        sc("📊 daily limit reached. try again tomorrow!"),
+                        "📊 daily limit reached — try again tomorrow.",
                         show_alert=True,
                     )
 
@@ -99,7 +97,7 @@ def register(dp: Dispatcher, settings: Settings):
                 cookie = await inventory.pick_account(conn, country)
                 if cookie is None:
                     return await callback.answer(
-                        sc("❌ out of stock for this country!"), show_alert=True
+                        "❌ out of stock for this country!", show_alert=True
                     )
 
                 # Record history and update user
@@ -133,9 +131,9 @@ def register(dp: Dispatcher, settings: Settings):
             )
         except Exception as e:
             log.exception("Failed to deliver account: %s", e)
-            return await callback.answer("⚠️ delivery error. contact admin.", show_alert=True)
+            return await callback.answer("⚠️ delivery error — contact admin.", show_alert=True)
 
-        await callback.answer(sc("✅ account delivered — check below!"))
+        await callback.answer("✅ delivered — check below!")
 
 
 async def inventory_repo_count(conn, country: str) -> int:

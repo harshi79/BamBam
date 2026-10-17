@@ -16,7 +16,9 @@ from app.services.points import credit
 from app.services.referrals import get_referral_link, get_referral_stats
 from app.keyboards.inline import back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
-from app.utils.formatting import build_daily_reward_text, build_daily_already_claimed
+from app.utils.formatting import (
+    build_daily_reward_text, build_daily_already_claimed, build_referral_text,
+)
 
 
 def register(dp: Dispatcher, bot: Bot, settings: Settings):
@@ -76,13 +78,11 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             stats = await get_referral_stats(conn, user.id)
             balance = await user_repo.get_points(conn, user.id)
 
-        text = sc_html(
-            f"🔗 <b>your referral link</b>\n\n"
-            f"<code>{link}</code>\n\n"
-            f"👥 referrals: <b>{stats['referral_count']}</b>\n"
-            f"💰 points: <b>{balance}</b>\n\n"
-            f"share your link — earn <b>{settings.REFERRAL_REWARD_POINTS} points</b> "
-            f"for each new user!"
+        text = build_referral_text(
+            link=link,
+            referral_count=stats["referral_count"],
+            balance=balance,
+            reward_points=settings.REFERRAL_REWARD_POINTS,
         )
 
         if isinstance(event, CallbackQuery):

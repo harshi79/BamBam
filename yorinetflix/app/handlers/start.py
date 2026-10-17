@@ -17,7 +17,7 @@ from app.services import subscriptions
 from app.services.referrals import process_referral
 from app.keyboards.inline import main_menu_kb, join_kb
 from app.utils.text import sc, sc_html, esc
-from app.utils.formatting import build_welcome_text
+from app.utils.formatting import build_welcome_text, build_fsub_prompt
 
 log = logging.getLogger("yorinetflix.handlers.start")
 
@@ -62,7 +62,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             )
             if not is_member:
                 await message.answer(
-                    sc("🚪 to use this bot, please join our channel first."),
+                    build_fsub_prompt(),
                     reply_markup=join_kb(settings.FORCE_CHANNEL_URL),
                 )
                 return
@@ -95,10 +95,10 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
         if not is_member:
             if err in ("channel_not_found", "bot_not_admin"):
                 await callback.answer(
-                    "⚠️ verification unavailable. try again later.", show_alert=True
+                    "⚠️ verification unavailable — try again later.", show_alert=True
                 )
             else:
-                await callback.answer(sc("❌ you haven't joined yet."), show_alert=True)
+                await callback.answer("❌ you haven't joined yet.", show_alert=True)
             return
 
         text = build_welcome_text()
@@ -109,7 +109,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             )
         except Exception:
             pass
-        await callback.answer(sc("✅ verified!"))
+        await callback.answer("✅ verified!")
 
     @dp.callback_query(F.data == "menu")
     async def cb_menu(callback: CallbackQuery):

@@ -1,7 +1,7 @@
 """
 YoriNetflix — Inline keyboard builders.
 
-All keyboards are pure functions returning InlineKeyboardMarkup.
+Clean, consistent button labels. All callback data is preserved.
 """
 
 from __future__ import annotations
@@ -16,28 +16,28 @@ from app.utils.formatting import normalize_url, DEFAULT_PC_URL, DEFAULT_TV_URL, 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=sc("Generate 🍿"), callback_data="gen:0")],
+        [InlineKeyboardButton(text="🍿 Generate", callback_data="gen:0")],
         [
-            InlineKeyboardButton(text=sc("Daily Reward 🎁"), callback_data="daily"),
-            InlineKeyboardButton(text=sc("Profile 📊"), callback_data="profile"),
+            InlineKeyboardButton(text="🎁 Daily", callback_data="daily"),
+            InlineKeyboardButton(text="📊 Profile", callback_data="profile"),
         ],
         [
-            InlineKeyboardButton(text=sc("History 🕘"), callback_data="history:1"),
-            InlineKeyboardButton(text=sc("Referral 🔗"), callback_data="referral"),
+            InlineKeyboardButton(text="🕘 History", callback_data="history:1"),
+            InlineKeyboardButton(text="🔗 Referral", callback_data="referral"),
         ],
     ])
 
 
 def back_to_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=sc("⬅️ Menu"), callback_data="menu")]
+        [InlineKeyboardButton(text="⬅️ Back", callback_data="menu")]
     ])
 
 
 def join_kb(force_channel_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=sc("📢 Join Channel"), url=force_channel_url)],
-        [InlineKeyboardButton(text=sc("✅ I Joined"), callback_data="check_join")],
+        [InlineKeyboardButton(text="📢 Join Channel", url=force_channel_url)],
+        [InlineKeyboardButton(text="✅ I Joined — Verify", callback_data="check_join")],
     ])
 
 
@@ -53,20 +53,20 @@ def country_list_kb(
     page_items = countries[start:start + page_size]
 
     buttons = [[InlineKeyboardButton(
-        text=f"🌍 {c['country']} · {c['count']}",
+        text=f"🌍 {c['country']}  ·  {c['count']}",
         callback_data=f"pick:{c['country']}"
     )] for c in page_items]
 
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"gen:{page - 1}"))
-    nav.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop"))
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"gen:{page - 1}"))
+    nav.append(InlineKeyboardButton(text=f"{page} / {total_pages}", callback_data="noop"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"gen:{page + 1}"))
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"gen:{page + 1}"))
     if nav:
         buttons.append(nav)
 
-    buttons.append([InlineKeyboardButton(text=sc("⬅️ Menu"), callback_data="menu")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Back", callback_data="menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -83,9 +83,9 @@ def cookie_action_kb(pc_url: str, tv_url: str, mobile_url: str) -> InlineKeyboar
 def history_nav_kb(page: int, total_pages: int) -> InlineKeyboardMarkup:
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"history:{page - 1}"))
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"history:{page - 1}"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"history:{page + 1}"))
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"history:{page + 1}"))
     buttons = [nav] if nav else []
-    buttons.append([InlineKeyboardButton(text=sc("⬅️ Menu"), callback_data="menu")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Back", callback_data="menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
