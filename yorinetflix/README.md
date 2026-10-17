@@ -1,16 +1,16 @@
 # YoriNetflix
 
-A polished, production-ready Telegram bot for distributing Netflix accounts with user profiles, daily rewards, referral earnings, and comprehensive admin controls.
+A production-ready Telegram bot for distributing authorized digital inventory with user profiles, daily rewards, referral earnings, and comprehensive admin controls.
 
 ## Features
 
-- **Account Distribution** — Paginated country selection, random inventory pick, instant delivery.
-- **Force Subscription** — Channel membership verification with configurable fail-closed behavior.
-- **User Profiles** — Generation history, unique countries, cooldown tracking.
+- **Inventory Distribution** — Paginated category selection, atomic allocation, instant delivery.
+- **Force Subscription** — Channel membership verification with fail-closed behavior.
+- **User Profiles** — Generation history, unique categories, cooldown tracking, point balance.
 - **Daily Rewards** — Configurable daily point claims with UTC-based reset.
 - **Referral System** — Unique referral links, anti-self-referral constraints, automatic reward crediting.
 - **Daily Limits** — Per-user generation caps independent of cooldowns.
-- **Admin Tools** — Inventory management, statistics, broadcasting, backup, export.
+- **Admin Tools** — Inventory management, statistics, broadcasting, point adjustments, user bans.
 - **Rate Limiting** — Throttle middleware to prevent spam and abuse.
 
 ## Tech Stack
@@ -19,6 +19,7 @@ A polished, production-ready Telegram bot for distributing Netflix accounts with
 - **Telegram Framework:** aiogram v3
 - **Database:** PostgreSQL (Neon)
 - **Driver:** asyncpg
+- **Config:** Pydantic Settings
 
 ## Quick Start
 
@@ -62,42 +63,86 @@ python -m app.database.migrations.runner
 python -m app.main
 ```
 
+Migrations also run automatically at startup, so step 4 is optional for subsequent runs.
+
 ## Project Structure
 
 ```
 yorinetflix/
 ├── app/
-│   ├── main.py                    # Entry point
-│   ├── config.py                  # Settings from environment
-│   ├── handlers/                  # Telegram command & callback handlers
-│   ├── keyboards/                 # Inline keyboard builders
-│   ├── services/                  # Business logic (stateless)
+│   ├── main.py                         # Entry point, bot startup, polling
+│   ├── config.py                       # Pydantic settings from env vars
+│   ├── handlers/
+│   │   ├── start.py                    # /start, welcome, FSUB, menu
+│   │   ├── generation.py              # Country selection, account delivery
+│   │   ├── profile.py                 # /profile
+│   │   ├── history.py                 # /history
+│   │   ├── leaderboard.py             # /top
+│   │   ├── rewards.py                 # /daily, /referral
+│   │   └── admin.py                   # All admin commands
+│   ├── keyboards/
+│   │   └── inline.py                  # All InlineKeyboardMarkup builders
+│   ├── services/
+│   │   ├── users.py                   # User operations
+│   │   ├── inventory.py               # Inventory parsing and allocation
+│   │   ├── points.py                  # Point balance and ledger
+│   │   ├── referrals.py               # Referral tracking and rewards
+│   │   ├── limits.py                  # Cooldowns and daily limits
+│   │   └── subscriptions.py           # FSUB verification
 │   ├── database/
-│   │   ├── connection.py          # asyncpg pool management
-│   │   ├── repository.py          # Data access queries  (Phase 3)
-│   │   └── migrations/            # SQL migration files + runner
-│   ├── middleware/                 # Throttle, logging middleware
-│   └── utils/                     # Text formatting, constants
-├── tests/                         # Unit & integration tests
-├── scripts/                       # Maintenance scripts
-├── requirements.txt               # Production dependencies
-├── requirements-dev.txt           # Dev/test dependencies
-├── .env.example                   # Documented env template
+│   │   ├── connection.py              # asyncpg pool management
+│   │   ├── repositories/
+│   │   │   ├── user_repo.py           # User CRUD
+│   │   │   ├── inventory_repo.py      # Inventory CRUD, atomic pick
+│   │   │   ├── history_repo.py        # Generation history
+│   │   │   ├── rewards_repo.py        # Daily claims, referrals, ledger
+│   │   │   └── config_repo.py         # Runtime config key-value
+│   │   └── migrations/
+│   │       ├── 001_initial.sql        # Core tables
+│   │       ├── 002_rewards.sql        # Rewards and referrals
+│   │       ├── 003_config.sql         # Runtime config
+│   │       └── runner.py              # Migration runner
+│   ├── middleware/
+│   │   └── throttle.py                # Rate limiting middleware
+│   └── utils/
+│       ├── text.py                    # Small-caps, HTML escaping
+│       └── formatting.py             # Message builders
+├── tests/
+│   ├── unit/                          # Pure function tests (no DB)
+│   ├── integration/                   # Tests requiring PostgreSQL
+│   └── conftest.py                    # Shared fixtures
+├── requirements.txt
+├── requirements-dev.txt
+├── Dockerfile
+├── Procfile
+├── .env.example
 └── README.md
 ```
+
+## User Commands
+
+| Command | Description |
+|---|---|
+| `/start` | Start the bot, optional referral parameter |
+| `/daily` | Claim daily reward points |
+| `/profile` | View your profile and stats |
+| `/history` | View generation history |
+| `/top` | Top generators leaderboard |
+| `/referral` | Get your referral link |
 
 ## Admin Commands
 
 | Command | Description |
 |---|---|
-| `/add` | Add cookies (reply to .txt or inline text) |
+| `/add` | Add inventory (reply to .txt or inline text) |
 | `/stats` | Bot statistics |
-| `/stock` | Inventory breakdown by country |
-| `/export [country]` | Export cookies to file |
-| `/backup` | Download database snapshot |
+| `/stock` | Inventory breakdown by category |
+| `/export [category]` | Export inventory to file |
 | `/broadcast` | Send message to all users |
-| `/clear_country <name>` | Remove inventory for one country |
+| `/clear_country <name>` | Remove inventory for one category |
 | `/wipe CONFIRM` | Delete all inventory |
+| `/givepoints <id> <amount>` | Adjust user points |
+| `/ban <id>` / `/unban <id>` | Ban/unban users |
 | `/admin` | Admin help |
 
 ## Environment Variables
