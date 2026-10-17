@@ -6,10 +6,10 @@ lifetime of the application. All database access should go through
 this module or through the repository layer built on top of it.
 
 Usage:
-    from app.database.connection import db_pool
+    from app.database.connection import get_pool
 
     async def some_query():
-        async with db_pool.get().acquire() as conn:
+        async with get_pool().acquire() as conn:
             row = await conn.fetchrow("SELECT 1")
 """
 
@@ -55,7 +55,9 @@ async def init_pool(dsn: str, *, min_size: int = 1, max_size: int = 5) -> asyncp
         dsn=dsn,
         min_size=min_size,
         max_size=max_size,
-        # Recycle connections every 5 minutes to avoid Neon's idle timeout.
+        # Neon terminates idle connections after ~5 minutes.
+        # Explicitly set to 4 minutes so the pool recycles before Neon drops.
+        max_inactive_connection_lifetime=240,
         command_timeout=30,
     )
     # Verify connectivity.

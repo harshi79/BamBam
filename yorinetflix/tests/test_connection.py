@@ -150,6 +150,56 @@ class TestPoolLifecycle:
             db_conn.get_pool()
 
 
+    @pytest.mark.asyncio
+    async def test_pool_created_with_neon_settings(self, monkeypatch):
+        """Pool should be created with settings compatible with Neon PostgreSQL.
+
+        Verifies:
+        - max_inactive_connection_lifetime is set (to recycle before Neon's
+          ~5-minute idle timeout).
+        - command_timeout is set (to avoid hanging queries).
+        - min_size and max_size are respected.
+        """
+        import asyncpg
+
+        captured_kwargs = {}
+
+        class FakeConn:
+            async def fetchval(self, query):
+                return "PostgreSQL 16.0"
+
+        class FakeAcquireCtx:
+            def __init__(self):
+                self._conn = FakeConn()
+
+            async def __aenter__(self):
+                return self._conn
+
+            async def __aexit__(self, *args):
+                pass
+
+        class FakePool:
+            def acquire(self):
+                return FakeAcquireCtx()
+
+            async def close(self):
+                pass
+
+        async def fake_create_pool(**kwargs):
+            captured_kwargs.update(kwargs)
+            return FakePool()
+
+        monkeypatch.setattr(asyncpg, "create_pool", fake_create_pool)
+
+        await db_conn.init_pool("postgresql://u:p@h:5432/d", min_size=2, max_size=8)
+
+        assert captured_kwargs["min_size"] == 2
+        assert captured_kwargs["max_size"] == 8
+        assert captured_kwargs["command_timeout"] == 30
+        # Must be explicitly set, not relying on asyncpg's default.
+        assert captured_kwargs["max_inactive_connection_lifetime"] == 240
+
+
 class TestCheckConnection:
     """Test the health check utility."""
 

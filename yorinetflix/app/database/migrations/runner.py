@@ -49,10 +49,10 @@ def discover_migrations() -> List[Tuple[int, str, Path]]:
 async def _ensure_migrations_table(conn: asyncpg.Connection) -> None:
     """Create schema_migrations table if it doesn't exist.
 
-    This table is normally created by 001_initial.sql, but we need
-    it to exist before we can check which migrations have run.
-    If it doesn't exist yet, 001_initial.sql will create it on its
-    first run — we just need this for the check query.
+    This table is also defined in 001_initial.sql (with IF NOT EXISTS),
+    but we need it to exist BEFORE running 001 so we can record which
+    migrations have been applied. This bootstrap runs first; the
+    IF NOT EXISTS in 001 is harmless if this already created it.
     """
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_migrations (
