@@ -1,0 +1,22 @@
+[project]
+name = "yorinetflix"
+version = "0.1.0"
+description = "YoriNetflix — Telegram bot for Netflix account distribution"
+requires-python = ">=3.11"
+license = {text = "AGPL-3.0"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+markers = [
+    "integration: marks tests that require a live database",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]  # line length handled by formatter

@@ -1,0 +1,46 @@
+# YoriNetflix — Project-specific ignores
+
+# Environment (secrets!)
+.env
+.env.local
+.env.production
+
+# Logs and runtime data
+logs/
+backups/
+
+# Python
+__pycache__/
+*.py[codz]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database files (local development only — production uses Neon)
+*.db
+*.db-journal
+*.db-wal
