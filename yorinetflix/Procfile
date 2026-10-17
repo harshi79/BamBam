@@ -1,0 +1,4 @@
+# YoriNetflix — Process file for Render, Railway, Heroku, etc.
+# Adjust the command to match your hosting platform.
+
+worker: python -m app.main
