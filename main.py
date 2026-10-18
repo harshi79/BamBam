@@ -15,7 +15,6 @@ from functools import wraps
 from logging.handlers import RotatingFileHandler
 from math import ceil
 from typing import Any, Awaitable, Callable
-from urllib.parse import urlsplit
 
 import aiosqlite
 from aiogram import Bot, Dispatcher, F, BaseMiddleware
@@ -55,23 +54,9 @@ START_VIDEO_URL = os.getenv(
     "https://imglink.cc/cdn/GMTRCTX88F.mp4"
 ).strip()
 
-# Sign-in destinations.  Plain, public Netflix pages carrying no credentials:
-# whoever opens them signs in as themselves.  There is no TV destination — TV
-# sign-in is an activation-code flow driven by the television, and no
-# auto-login token is ever generated, stored, or embedded here.
+DEFAULT_TV_URL = "https://www.netflix.com/tv2"
 DEFAULT_PC_URL = "https://www.netflix.com/account"
 DEFAULT_MOBILE_URL = "https://www.netflix.com/login"
-
-# Query parameters that carry credentials.  Netflix's auto-login token
-# (``nftoken``) and friends sign whoever opens the link straight into an
-# account, with no password prompt.  A button URL is shared, cached and logged
-# by Telegram, so such a parameter must never survive into a button.
-CREDENTIAL_QUERY_PARAMS = frozenset({
-    "nftoken", "nf_token", "token", "authtoken", "auth_token",
-    "access_token", "accesstoken", "idtoken", "id_token", "session",
-    "sessionid", "session_id", "sid", "password", "pass", "pwd",
-    "netflixid", "securenetflixid",
-})
 
 # ─────────────────────────────────────────────────────────────
 # SMALL CAPS UNICODE TRANSFORMER
@@ -475,71 +460,20 @@ def build_cookie_string(netflix_id: str, secure_id: str) -> str:
     return "\n".join(parts)
 
 
-def strip_credential_params(url: str) -> str:
-    """Remove credential-bearing query parameters from a URL.
-
-    Netflix auto-login tokens (``nftoken``) and similar session parameters are
-    dropped, along with any fragment that accompanied them.  Harmless
-    parameters and the path are left untouched, so ordinary sign-in and
-    activation links pass through unchanged.
-    """
-    if "?" not in url:
-        return url
-
-    base, _, rest = url.partition("?")
-    query, _, fragment = rest.partition("#")
-
-    kept = []
-    dropped = False
-    for pair in query.split("&"):
-        if not pair:
-            continue
-        name = pair.split("=", 1)[0].strip().lower()
-        if name in CREDENTIAL_QUERY_PARAMS:
-            dropped = True
-            continue
-        kept.append(pair)
-
-    cleaned = base + ("?" + "&".join(kept) if kept else "")
-    if fragment and not dropped:
-        cleaned += "#" + fragment
-    return cleaned
-
-
 def normalize_url(url: str, fallback: str) -> str:
-    """Return a button-safe sign-in URL.
-
-    Uses ``fallback`` when the inventory carried no usable URL, adds the scheme
-    when it is missing, and strips credential-bearing query parameters so a
-    button can never hand out a pre-authenticated session.  When stripping
-    leaves nothing but a bare host, the official fallback page is used instead.
-    """
     url = (url or "").strip()
     if not url or url.upper() == "N/A":
-        return strip_credential_params(fallback)
+        return fallback
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-
-    cleaned = strip_credential_params(url)
-    if cleaned != url and urlsplit(cleaned).path in ("", "/"):
-        # The URL was only a credential carrier — send the person to the
-        # official page for that route instead of a bare domain root.
-        return strip_credential_params(fallback)
-    return cleaned
+    return url
 
 
 def cookie_action_kb(pc_url: str, tv_url: str, mobile_url: str) -> InlineKeyboardMarkup:
-    """PC and Mobile sign-in routes.
-
-    There is deliberately no TV route: TV sign-in is an activation-code flow
-    driven by the television itself, so a button here could only ever be a
-    pre-authenticated link.  ``tv_url`` is still accepted (callers pass the
-    stored inventory value) but is not rendered.
-    """
-    del tv_url  # accepted for call-site compatibility; no TV button is built
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="↗ Pᴄ", url=normalize_url(pc_url, DEFAULT_PC_URL)),
+            InlineKeyboardButton(text="↗ Tᴠ", url=normalize_url(tv_url, DEFAULT_TV_URL)),
             InlineKeyboardButton(text="↗ Mᴏʙɪʟᴇ", url=normalize_url(mobile_url, DEFAULT_MOBILE_URL)),
         ],
     ])
