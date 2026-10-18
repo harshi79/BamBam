@@ -172,7 +172,7 @@ class ThrottleMiddleware(BaseMiddleware):
                 return None
             if isinstance(event, CallbackQuery):
                 try:
-                    await event.answer(sc("⏳ slow down."), show_alert=False)
+                    await event.answer("Please wait a moment before trying again.", show_alert=False)
                 except TelegramBadRequest:
                     pass
                 return None
@@ -195,7 +195,9 @@ def admin_only(func):
     @wraps(func)
     async def wrapper(message: Message, *args, **kwargs):
         if message.from_user is None or message.from_user.id != ADMIN_ID:
-            return await message.answer(sc("⛔️ unauthorized."))
+            return await message.answer(
+                _ui_notice("Admin only", "This command is reserved for administrators.")
+            )
         return await func(message, *args, **kwargs)
     return wrapper
 
@@ -415,6 +417,21 @@ def parse_bulk_cookies(text: str) -> list[dict]:
 # ─────────────────────────────────────────────────────────────
 # DISPLAY BUILDERS
 # ─────────────────────────────────────────────────────────────
+
+_UI_RULE = "┄┄┄┄┄┄┄┄┄┄┄"
+
+
+def _ui_heading(title: str) -> str:
+    return f"<b>◇ {sc_html(title)}</b>"
+
+
+def _ui_section(title: str) -> str:
+    return f"<b>{sc_html(title)}</b>"
+
+
+def _ui_notice(title: str, body: str) -> str:
+    return f"{_ui_heading(title)}\n{body}"
+
 def clean_info_block(raw_text: str) -> str:
     kept = []
     for line in raw_text.split("\n"):
@@ -455,9 +472,9 @@ def normalize_url(url: str, fallback: str) -> str:
 def cookie_action_kb(pc_url: str, tv_url: str, mobile_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="💻 PC", url=normalize_url(pc_url, DEFAULT_PC_URL)),
-            InlineKeyboardButton(text="📺 TV", url=normalize_url(tv_url, DEFAULT_TV_URL)),
-            InlineKeyboardButton(text="📱 Mobile", url=normalize_url(mobile_url, DEFAULT_MOBILE_URL)),
+            InlineKeyboardButton(text="↗ Pᴄ", url=normalize_url(pc_url, DEFAULT_PC_URL)),
+            InlineKeyboardButton(text="↗ Tᴠ", url=normalize_url(tv_url, DEFAULT_TV_URL)),
+            InlineKeyboardButton(text="↗ Mᴏʙɪʟᴇ", url=normalize_url(mobile_url, DEFAULT_MOBILE_URL)),
         ],
     ])
 
@@ -473,24 +490,24 @@ def build_account_message(
     cookie_str = build_cookie_string(netflix_id, secure_id)
 
     parts = [
-        sc_html(f"🎬 <b>{esc(country)} — Netflix Account</b>"),
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        "",
+        f"<b>◇ {esc(country)}</b>  ·  {sc_html('Netflix access')}",
+        _UI_RULE,
     ]
     if info:
-        parts.append(f"<blockquote>{esc(info)}</blockquote>")
-        parts.append("")
+        parts.extend(["", f"<blockquote>{esc(info)}</blockquote>"])
 
     if cookie_str:
-        parts.append(sc_html("🍪 <b>Cookie</b> <i>(tap below to copy)</i>"))
-        parts.append(f"<blockquote><code>{esc(cookie_str)}</code></blockquote>")
-        parts.append("")
+        parts.extend([
+            "",
+            f"{_ui_section('Cookie')}  <i>{sc_html('tap to copy')}</i>",
+            f"<blockquote><code>{esc(cookie_str)}</code></blockquote>",
+        ])
 
     parts.extend([
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        sc_html(f"📦 remaining for {esc(country)}: <b>{remaining}</b>"),
-        sc_html("💡 tap a button below to open the login page."),
-        sc_html("📌 <i>save this message — you can reuse it anytime.</i>"),
+        "",
+        _UI_RULE,
+        f"<b>{remaining}</b> {sc_html('remaining')}  ·  {esc(country)}",
+        f"<i>{sc_html('Use a route below to open sign-in.')}</i>",
     ])
     return "\n".join(parts)
 
@@ -500,25 +517,26 @@ def build_account_message(
 # ─────────────────────────────────────────────────────────────
 def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=sc("Generate 🍿"), callback_data="gen:0")],
+        [InlineKeyboardButton(text="✦ Gᴇɴᴇʀᴀᴛᴇ", callback_data="gen:0")],
         [
-            InlineKeyboardButton(text=sc("Profile 📊"), callback_data="profile"),
-            InlineKeyboardButton(text=sc("History 🕘"), callback_data="history:1"),
+            InlineKeyboardButton(text="◉ Pʀᴏꜰɪʟᴇ", callback_data="profile"),
+            InlineKeyboardButton(text="≡ Hɪꜱᴛᴏʀʏ", callback_data="history:1"),
         ],
     ])
 
 
 def back_to_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=sc("⬅️ Menu"), callback_data="menu")]
+        [InlineKeyboardButton(text="‹ Menu", callback_data="menu")]
     ])
 
 
 def join_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=sc("📢 Join Channel"),
-                              url=FORCE_CHANNEL_URL or "https://t.me/")],
-        [InlineKeyboardButton(text=sc("✅ I Joined"), callback_data="check_join")],
+        [InlineKeyboardButton(
+            text="↗ Join Channel", url=FORCE_CHANNEL_URL or "https://t.me/"
+        )],
+        [InlineKeyboardButton(text="✓ Joined · Verify", callback_data="check_join")],
     ])
 
 
@@ -526,11 +544,12 @@ def join_kb() -> InlineKeyboardMarkup:
 # /start — ONE message: video + caption + buttons
 # ─────────────────────────────────────────────────────────────
 def build_welcome_text() -> str:
-    return sc_html(
-        "🎬 <b>Netflix Account Distributor</b>\n\n"
-        "Get premium accounts — free, instant, no strings.\n"
-        "Made by <a href=\"https://t.me/Yorichiiprime\">@Yorichiiprime</a>\n\n"
-        "<i>Tap a button below to begin.</i>"
+    return (
+        f"<b>✦ {sc_html('yorinetflix')}</b>\n"
+        f"<blockquote>{sc_html('welcome to the premium account desk')}</blockquote>\n\n"
+        f"{sc_html('premium accounts · free · instant · no strings')}\n\n"
+        f"<i>Crafted by <a href=\"https://t.me/Yorichiiprime\">@Yorichiiprime</a></i>\n"
+        f"<i>Choose a destination below to begin.</i>"
     )
 
 
@@ -559,7 +578,7 @@ async def cmd_start(message: Message):
     await upsert_user(message.from_user)
     if not await is_member(message.from_user.id):
         return await message.answer(
-            sc("🚪 to use this bot, please join our channel first."),
+            "<b>◇ ᴀᴄᴄᴇꜱꜱ ʀᴇǫᴜɪʀᴇᴅ</b>\nJoin our channel to use the account desk, then verify below.",
             reply_markup=join_kb()
         )
     await send_welcome(message)
@@ -568,9 +587,9 @@ async def cmd_start(message: Message):
 @dp.callback_query(F.data == "check_join")
 async def cb_check_join(callback: CallbackQuery):
     if not await is_member(callback.from_user.id):
-        return await safe_answer(callback, sc("❌ you haven't joined yet."), alert=True)
+        return await safe_answer(callback, "× You have not joined the channel yet.", alert=True)
     await safe_edit(callback.message, build_welcome_text(), reply_markup=main_menu_kb())
-    await safe_answer(callback, sc("✅ verified!"))
+    await safe_answer(callback, "✓ Membership verified.")
 
 
 @dp.callback_query(F.data == "menu")
@@ -592,8 +611,14 @@ async def render_countries(page: int) -> tuple[str, InlineKeyboardMarkup]:
             rows = await cur.fetchall()
 
     if not rows:
-        return (sc("❌ no cookies in stock right now. check back later!"),
-                back_to_menu_kb())
+        return (
+            (
+                f"{_ui_heading('Inventory unavailable')}\n\n"
+                "<blockquote>There are no accounts available at the moment.\n"
+                "Please check back later.</blockquote>"
+            ),
+            back_to_menu_kb(),
+        )
 
     total_available = sum(c for _, c in rows)
     total_pages = max(1, ceil(len(rows) / PAGE_SIZE))
@@ -602,24 +627,25 @@ async def render_countries(page: int) -> tuple[str, InlineKeyboardMarkup]:
     page_rows = rows[start:start + PAGE_SIZE]
 
     buttons = [[InlineKeyboardButton(
-        text=f"🌍 {c} · {n}",
+        text=f"◇ {c}  ·  {n}",
         callback_data=f"pick:{c}"
     )] for c, n in page_rows]
 
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"gen:{page-1}"))
-    nav.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop"))
+        nav.append(InlineKeyboardButton(text="‹", callback_data=f"gen:{page-1}"))
+    nav.append(InlineKeyboardButton(text=f"· {page} / {total_pages} ·", callback_data="noop"))
     if page < total_pages:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"gen:{page+1}"))
+        nav.append(InlineKeyboardButton(text="›", callback_data=f"gen:{page+1}"))
     if nav:
         buttons.append(nav)
-    buttons.append([InlineKeyboardButton(text=sc("⬅️ Menu"), callback_data="menu")])
+    buttons.append([InlineKeyboardButton(text="‹ Menu", callback_data="menu")])
 
-    text = sc_html(
-        f"🌍 <b>select a country</b>\n\n"
-        f"📦 total in stock: <b>{total_available}</b>\n"
-        f"🗂 countries: <b>{len(rows)}</b>"
+    text = (
+        f"<b>◇ {sc_html('Select a country')}</b>\n\n"
+        f"<blockquote>Choose a country to browse available stock.</blockquote>\n\n"
+        f"<code>{total_available}</code> {sc_html('accounts in stock')}  ·  "
+        f"<code>{len(rows)}</code> {sc_html('countries')}"
     )
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -659,7 +685,7 @@ async def cb_pick_country(callback: CallbackQuery):
             wait = COOLDOWN_SECONDS - (now - last_gen)
             return await safe_answer(
                 callback,
-                sc(f"⏳ wait {wait}s before generating again."),
+                f"↻ Available in {wait}s. Please wait before generating again.",
                 alert=True
             )
 
@@ -674,7 +700,7 @@ async def cb_pick_country(callback: CallbackQuery):
 
         if not cookie:
             await db.execute("ROLLBACK")
-            return await safe_answer(callback, sc("❌ out of stock for this country!"), alert=True)
+            return await safe_answer(callback, "No stock remains for this country.", alert=True)
 
         (cookie_id, raw_text, pc_url, phone_url, tv_url,
          netflix_id, secure_netflix_id) = cookie
@@ -711,9 +737,9 @@ async def cb_pick_country(callback: CallbackQuery):
         )
     except Exception as e:
         log.exception("Failed to deliver cookie: %s", e)
-        return await safe_answer(callback, sc("⚠️ delivery error. contact admin."), alert=True)
+        return await safe_answer(callback, "Delivery failed. Please contact an administrator.", alert=True)
 
-    await safe_answer(callback, sc("✅ account delivered — check below!"))
+    await safe_answer(callback, "✓ Delivered. Your account is in the message below.")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -737,17 +763,18 @@ async def build_profile(user) -> str:
     joined = row[2] if row else int(time.time())
 
     remaining = max(0, COOLDOWN_SECONDS - (int(time.time()) - last_gen))
-    cd_text = sc(f"{remaining}s") if remaining else sc("ready ✅")
+    cd_text = f"{remaining}s" if remaining else sc("ready")
     joined_str = datetime.fromtimestamp(joined, tz=timezone.utc).strftime("%Y-%m-%d")
 
-    return sc_html(
-        f"📊 <b>your profile</b>\n\n"
-        f"👤 <b>name:</b> {esc(user.full_name)}\n"
-        f"🆔 <b>id:</b> <code>{uid}</code>\n"
-        f"📅 <b>joined:</b> {joined_str}\n\n"
-        f"🍿 <b>total generated:</b> {total}\n"
-        f"🌍 <b>unique countries:</b> {countries}\n"
-        f"⏳ <b>cooldown:</b> {cd_text}"
+    return (
+        f"{_ui_heading('Your profile')}\n\n"
+        f"<blockquote><b>{esc(user.full_name)}</b>\n"
+        f"<code>{uid}</code>  ·  {sc_html('member since')} <i>{joined_str}</i></blockquote>\n\n"
+        f"{_UI_RULE}\n"
+        f"{_ui_section('Account overview')}\n"
+        f"·  {sc_html('Generated')}  <b>{total}</b>\n"
+        f"·  {sc_html('Countries')}  <b>{countries}</b>\n"
+        f"·  {sc_html('Cooldown')}  <b>{cd_text}</b>"
     )
 
 
@@ -805,26 +832,42 @@ async def show_history(send, user_id: int, page: int, edit: bool = False, messag
             rows = await cur.fetchall()
 
     if not rows:
-        text = sc_html("🕘 <b>your history is empty.</b>\n\ngenerate an account to see it here.")
+        text = (
+            f"{_ui_heading('Generation history')}\n\n"
+            "<blockquote>No generations yet.\nYour first account will appear here.</blockquote>"
+        )
         kb = back_to_menu_kb()
     else:
         total_pages = max(1, ceil(total / per_page))
-        lines = [sc_html("🕘 <b>your recent generations</b>\n")]
-        for c, ts in rows:
-            when = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
-            lines.append(sc_html(f"• <b>{esc(c)}</b> — <i>{when} UTC</i>"))
-        lines.append(sc_html(
-            f"\n📄 page <b>{page}</b>/<b>{total_pages}</b> · total: <b>{total}</b>"
-        ))
+        first_index = (page - 1) * per_page + 1
+        lines = [
+            _ui_heading("Generation history"),
+            f"<i>{sc_html('Most recent first')}</i>",
+            "",
+        ]
+        for rank, (country, timestamp) in enumerate(rows, start=first_index):
+            when = datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+            lines.append(
+                f"<code>{rank:02d}</code>  <b>{esc(country)}</b>\n"
+                f"     <i>{when} UTC</i>"
+            )
+        lines.extend([
+            "",
+            _UI_RULE,
+            (
+                f"<code>{page:02d} / {total_pages:02d}</code>  ·  "
+                f"{sc_html('Entries')}  <b>{total}</b>"
+            ),
+        ])
         text = "\n".join(lines)
 
         nav = []
         if page > 1:
-            nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"history:{page-1}"))
+            nav.append(InlineKeyboardButton(text="‹", callback_data=f"history:{page-1}"))
         if page < total_pages:
-            nav.append(InlineKeyboardButton(text="➡️", callback_data=f"history:{page+1}"))
+            nav.append(InlineKeyboardButton(text="›", callback_data=f"history:{page+1}"))
         buttons = [nav] if nav else []
-        buttons.append([InlineKeyboardButton(text=sc("⬅️ Menu"), callback_data="menu")])
+        buttons.append([InlineKeyboardButton(text="‹ Menu", callback_data="menu")])
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     if edit:
@@ -850,15 +893,19 @@ async def cmd_top(message: Message):
 
     if not rows:
         return await message.answer(
-            sc("🏆 no generations yet."),
+            f"{_ui_heading('Top generators')}\n\n"
+            "<blockquote>No generations have been recorded yet.</blockquote>",
             reply_markup=back_to_menu_kb()
         )
 
-    lines = [sc_html("🏆 <b>top generators</b>\n")]
-    medals = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
-    for i, (_uid, full_name, username, total) in enumerate(rows):
+    lines = [
+        _ui_heading("Top generators"),
+        f"<i>{sc_html('All-time ranking')}</i>",
+        "",
+    ]
+    for rank, (_uid, full_name, username, total) in enumerate(rows, start=1):
         name = esc(full_name or username or "Unknown")
-        lines.append(sc_html(f"{medals[i]} <b>{name}</b> — {total}"))
+        lines.append(f"<code>{rank:02d}</code>  <b>{name}</b>  ·  <b>{total}</b>")
     await message.answer("\n".join(lines), reply_markup=back_to_menu_kb())
 
 
@@ -887,17 +934,20 @@ async def admin_add(message: Message):
         elif replied.text:
             text_to_parse = replied.text
         else:
-            return await message.answer(sc("⚠️ reply to a text message or a .txt file."))
+            return await message.answer(_ui_notice("Unsupported attachment", "Reply to text or a <code>.txt</code> file."))
     elif message.text and len(message.text.split(maxsplit=1)) > 1:
         text_to_parse = message.text.split(maxsplit=1)[1]
     else:
         return await message.answer(
-            sc_html("⚠️ usage: reply to a .txt with /add, or send /add &lt;cookie text&gt;")
+            "<b>◇ ᴜꜱᴀɢᴇ</b>\nReply to a <code>.txt</code> file with <code>/add</code>, "
+            "or send <code>/add &lt;cookie text&gt;</code>."
         )
 
     parsed = parse_bulk_cookies(text_to_parse)
     if not parsed:
-        return await message.answer(sc("⚠️ nothing to parse."))
+        return await message.answer(_ui_notice(
+            "No inventory found", "Add a supported export or a <code>.txt</code> file."
+        ))
 
     added = 0
     dupes = 0
@@ -919,10 +969,11 @@ async def admin_add(message: Message):
                 dupes += 1
         await db.commit()
 
-    await message.answer(sc_html(
-        f"✅ added <b>{added}</b> account(s).\n"
-        f"♻️ skipped <b>{dupes}</b> duplicate(s)."
-    ))
+    await message.answer(
+        f"{_ui_heading('Inventory updated')}\n\n"
+        f"{sc_html('Added')}  <b>{added}</b> {sc_html('accounts')}\n"
+        f"{sc_html('Duplicates skipped')}  <b>{dupes}</b>"
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -953,22 +1004,26 @@ async def admin_stats(message: Message):
         ) as cur:
             top = await cur.fetchall()
 
-    top_text = "\n".join(sc_html(f"  • {esc(c)} — {n}") for c, n in top) or "  —"
+    top_text = "\n".join(
+        f"·  {esc(country)}  <b>{count}</b>" for country, count in top
+    ) or "·  —"
 
-    await message.answer(sc_html(
-        f"📊 <b>bot statistics</b>\n\n"
-        f"🍿 <b>stock</b>\n"
-        f"  • accounts: <b>{total_cookies}</b>\n"
-        f"  • countries: <b>{total_countries}</b>\n\n"
-        f"👥 <b>users</b>\n"
-        f"  • total: <b>{total_users}</b>\n"
-        f"  • active (24h): <b>{active_24h}</b>\n\n"
-        f"🎁 <b>generations</b>\n"
-        f"  • all time: <b>{total_gens}</b>\n"
-        f"  • last 24h: <b>{gens_24h}</b>\n"
-        f"  • last 7d: <b>{gens_7d}</b>\n\n"
-        f"<b>top stock:</b>\n{top_text}"
-    ))
+    await message.answer(
+        f"{_ui_heading('Bot overview')}\n\n"
+        f"{_ui_section('Inventory')}\n"
+        f"·  {sc_html('Accounts')}  <b>{total_cookies}</b>\n"
+        f"·  {sc_html('Countries')}  <b>{total_countries}</b>\n\n"
+        f"{_UI_RULE}\n"
+        f"{_ui_section('Community')}\n"
+        f"·  {sc_html('Users')}  <b>{total_users}</b>\n"
+        f"·  {sc_html('Active · 24h')}  <b>{active_24h}</b>\n\n"
+        f"{_UI_RULE}\n"
+        f"{_ui_section('Generations')}\n"
+        f"·  {sc_html('All time')}  <b>{total_gens}</b>\n"
+        f"·  {sc_html('Last 24h')}  <b>{gens_24h}</b>\n"
+        f"·  {sc_html('Last 7d')}  <b>{gens_7d}</b>\n\n"
+        f"{_ui_section('Top stock')}\n{top_text}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -983,11 +1038,24 @@ async def admin_stock(message: Message):
         ) as cur:
             rows = await cur.fetchall()
     if not rows:
-        return await message.answer(sc("📦 stock is empty."))
-    lines = [sc_html("📦 <b>stock breakdown</b>\n")]
-    for c, n in rows:
-        lines.append(sc_html(f"• {esc(c)} — <b>{n}</b>"))
-    lines.append(sc_html(f"\n<b>total:</b> {sum(n for _, n in rows)}"))
+        return await message.answer(
+            f"{_ui_heading('Inventory empty')}\n"
+            "There is currently nothing in stock."
+        )
+    lines = [
+        _ui_heading("Stock overview"),
+        (
+            f"<i>{len(rows)} {sc_html('countries')}  ·  "
+            f"{sum(count for _, count in rows)} {sc_html('accounts')}</i>"
+        ),
+        _UI_RULE,
+    ]
+    for country, count in rows:
+        lines.append(f"{esc(country)}  ·  <b>{count}</b>")
+    lines.extend([
+        _UI_RULE,
+        f"{_ui_section('Total')}  <b>{sum(count for _, count in rows)}</b>",
+    ])
     await message.answer("\n".join(lines))
 
 
@@ -1009,7 +1077,7 @@ async def admin_export(message: Message):
             filename = "export_all.txt"
 
     if not rows:
-        return await message.answer(sc("⚠️ nothing to export."))
+        return await message.answer(_ui_notice("Nothing to export", "No inventory matches this request."))
 
     path = os.path.join(BACKUP_DIR, filename)
     with open(path, "w", encoding="utf-8") as f:
@@ -1017,7 +1085,10 @@ async def admin_export(message: Message):
 
     await message.answer_document(
         FSInputFile(path),
-        caption=sc_html(f"📤 exported <b>{len(rows)}</b> account(s).")
+        caption=(
+            f"{_ui_heading('Export ready')}\n"
+            f"{sc_html('Accounts')}  <b>{len(rows)}</b>"
+        )
     )
 
 
@@ -1025,7 +1096,7 @@ async def admin_export(message: Message):
 @admin_only
 async def admin_backup(message: Message):
     if not os.path.exists(DB_NAME):
-        return await message.answer(sc("⚠️ no db file yet."))
+        return await message.answer(_ui_notice("Snapshot unavailable", "No database file is available yet."))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     path = os.path.join(BACKUP_DIR, f"backup_{stamp}.db")
 
@@ -1039,7 +1110,10 @@ async def admin_backup(message: Message):
 
     await message.answer_document(
         FSInputFile(path),
-        caption=sc_html(f"💾 backup <b>{stamp}</b>")
+        caption=(
+            f"{_ui_heading('Database snapshot ready')}\n"
+            f"<code>{stamp}</code>"
+        )
     )
 
 
@@ -1047,15 +1121,19 @@ async def admin_backup(message: Message):
 @admin_only
 async def admin_broadcast(message: Message):
     if not message.reply_to_message:
-        return await message.answer(sc("⚠️ reply to a message with /broadcast"))
+        return await message.answer(_ui_notice(
+            "Broadcast needs a message",
+            "Reply to a message with <code>/broadcast</code> to send it."
+        ))
 
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute("SELECT user_id FROM users") as cur:
             users = [r[0] for r in await cur.fetchall()]
 
-    status = await message.answer(sc_html(
-        f"📤 broadcasting to <b>{len(users)}</b> user(s)…"
-    ))
+    status = await message.answer(
+        f"{_ui_heading('Broadcasting')}\n"
+        f"{sc_html('Delivering to')}  <b>{len(users)}</b> {sc_html('users')}…"
+    )
 
     sent = failed = blocked = 0
     for uid in users:
@@ -1077,18 +1155,19 @@ async def admin_broadcast(message: Message):
 
         if (sent + failed + blocked) % 25 == 0:
             try:
-                await status.edit_text(sc_html(
-                    f"📤 broadcasting…\n✅ {sent} · ❌ {failed} · 🚫 {blocked}"
-                ))
+                await status.edit_text(f"{_ui_heading('Broadcast in progress')}\n\n"
+                    f"{sc_html('Sent')}  <b>{sent}</b>  ·  "
+                    f"{sc_html('Failed')}  <b>{failed}</b>  ·  "
+                    f"{sc_html('Blocked')}  <b>{blocked}</b>")
             except TelegramBadRequest:
                 pass
 
-    await status.edit_text(sc_html(
-        f"✅ <b>broadcast complete</b>\n\n"
-        f"📬 sent: <b>{sent}</b>\n"
-        f"❌ failed: <b>{failed}</b>\n"
-        f"🚫 blocked: <b>{blocked}</b>"
-    ))
+    await status.edit_text(
+        f"{_ui_heading('Broadcast complete')}\n\n"
+        f"{sc_html('Delivered')}  <b>{sent}</b>\n"
+        f"{sc_html('Failed')}  <b>{failed}</b>\n"
+        f"{sc_html('Blocked')}  <b>{blocked}</b>"
+    )
 
 
 @dp.message(Command("clear_country"))
@@ -1096,15 +1175,17 @@ async def admin_broadcast(message: Message):
 async def admin_clear_country(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        return await message.answer(sc_html("usage: /clear_country &lt;country&gt;"))
+        return await message.answer(_ui_notice("Usage", "Use <code>/clear_country &lt;country&gt;</code>."))
     country = parts[1].strip()
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("DELETE FROM cookies WHERE country = ?", (country,))
         await db.commit()
         deleted = cur.rowcount
-    await message.answer(sc_html(
-        f"🗑 deleted <b>{deleted}</b> cookie(s) from <b>{esc(country)}</b>."
-    ))
+    await message.answer(
+        f"{_ui_heading('Inventory cleared')}\n"
+        f"{sc_html('Removed')}  <b>{deleted}</b> {sc_html('items')}  ·  "
+        f"{esc(country)}"
+    )
 
 
 @dp.message(Command("wipe"))
@@ -1112,31 +1193,39 @@ async def admin_clear_country(message: Message):
 async def admin_wipe(message: Message):
     args = message.text.split(maxsplit=1)
     if len(args) < 2 or args[1].strip() != "CONFIRM":
-        return await message.answer(sc_html(
-            "⚠️ this deletes <b>all cookies</b>. send <code>/wipe CONFIRM</code> to proceed."
-        ))
+        return await message.answer(
+            f"{_ui_heading('Confirm inventory reset')}\n"
+            "This deletes <b>all inventory</b>.\n"
+            "Send <code>/wipe CONFIRM</code> to proceed."
+        )
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("DELETE FROM cookies")
         await db.commit()
         deleted = cur.rowcount
-    await message.answer(sc_html(f"🗑 wiped <b>{deleted}</b> account(s)."))
+    await message.answer(
+        f"{_ui_heading('Inventory wiped')}\n"
+        f"{sc_html('Removed')}  <b>{deleted}</b> {sc_html('accounts')}"
+    )
 
 
 @dp.message(Command("admin"))
 @admin_only
 async def admin_help(message: Message):
-    await message.answer(sc_html(
-        "🛠 <b>admin commands</b>\n\n"
-        "/add — reply to .txt or text to add cookies\n"
-        "/stats — bot statistics\n"
-        "/stock — stock breakdown per country\n"
-        "/export [country] — export cookies to .txt\n"
-        "/backup — download db snapshot\n"
-        "/broadcast — reply to a message to send to all users\n"
-        "/clear_country &lt;name&gt; — wipe cookies for one country\n"
-        "/wipe CONFIRM — delete all cookies\n"
-        "/admin — this menu"
-    ))
+    await message.answer(
+        f"{_ui_heading('Admin console')}\n"
+        f"<i>{sc_html('Operations · authorized access')}</i>\n\n"
+        f"{_ui_section('Inventory')}\n"
+        "<code>/add</code>  Add inventory (.txt or text)\n"
+        "<code>/stock</code>  View the stock breakdown\n"
+        "<code>/export [country]</code>  Export inventory\n"
+        "<code>/backup</code>  Download a database snapshot\n"
+        "<code>/clear_country &lt;name&gt;</code>  Remove one country\n"
+        "<code>/wipe CONFIRM</code>  Delete all inventory\n\n"
+        f"{_ui_section('Analytics and users')}\n"
+        "<code>/stats</code>  View bot statistics\n"
+        "<code>/broadcast</code>  Message all users\n\n"
+        f"<i><code>/admin</code> opens this console.</i>"
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1145,7 +1234,9 @@ async def admin_help(message: Message):
 @dp.message(F.text & ~F.text.startswith("/"))
 async def fallback(message: Message):
     await message.answer(
-        sc("use /start to begin, /profile for stats, or /history to see past generations."),
+        f"{_ui_heading('Account desk')}\n"
+        "Send /start to begin, /profile to view your stats, "
+        "or /history to review previous generations.",
         reply_markup=main_menu_kb()
     )
 
@@ -1155,10 +1246,10 @@ async def fallback(message: Message):
 # ─────────────────────────────────────────────────────────────
 async def set_commands():
     await bot.set_my_commands([
-        BotCommand(command="start", description="Start the bot"),
-        BotCommand(command="profile", description="Your profile"),
-        BotCommand(command="history", description="Your generation history"),
-        BotCommand(command="top", description="Top generators"),
+        BotCommand(command="start", description="Open the YoriNetflix account desk"),
+        BotCommand(command="profile", description="View your account overview"),
+        BotCommand(command="history", description="Review your recent generations"),
+        BotCommand(command="top", description="View the all-time ranking"),
     ])
 
 

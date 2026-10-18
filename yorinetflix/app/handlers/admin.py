@@ -8,28 +8,33 @@ import asyncio
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from aiogram.filters import Command
-from aiogram.types import Message, FSInputFile
-from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
+from aiogram.types import FSInputFile, Message
 
 from app.config import Settings
 from app.database.connection import get_pool
 from app.database.repositories import (
-    user_repo, inventory_repo, history_repo, config_repo,
+    history_repo,
+    inventory_repo,
+    user_repo,
 )
-from app.services.inventory import parse_bulk_cookies, add_inventory
+from app.services.inventory import add_inventory, parse_bulk_cookies
 from app.services.points import admin_adjust
-from app.utils.text import sc, sc_html, esc
-from app.utils.messaging import safe_edit
 from app.utils.formatting import (
-    build_admin_help, build_admin_stats, build_stock_breakdown,
-    build_add_result, build_givepoints_result,
-    build_broadcast_progress, build_broadcast_complete,
+    build_add_result,
+    build_admin_help,
+    build_admin_only,
+    build_admin_stats,
+    build_broadcast_complete,
+    build_broadcast_progress,
+    build_givepoints_result,
+    build_stock_breakdown,
 )
-from app.keyboards.inline import back_to_menu_kb
+from app.utils.messaging import safe_edit
+from app.utils.text import esc, sc_html
 
 log = logging.getLogger("yorinetflix.handlers.admin")
 
@@ -38,18 +43,22 @@ def _is_admin(user_id: int, settings: Settings) -> bool:
     return user_id in settings.admin_id_set
 
 
+def _notice(title: str, body: str) -> str:
+    return f"<b>◇ {sc_html(title)}</b>\n{body}"
+
+
 def register(dp: Dispatcher, bot: Bot, settings: Settings):
 
     @dp.message(Command("admin"))
     async def admin_help(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
         await message.answer(build_admin_help())
 
     @dp.message(Command("add"))
     async def admin_add(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
 
         text_to_parse = ""
         if message.reply_to_message:
@@ -66,18 +75,27 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             elif replied.text:
                 text_to_parse = replied.text
             else:
-                return await message.answer("⚠️ reply to a text message or a .txt file.")
+                return await message.answer(_notice(
+                    "Unsupported attachment",
+                    "Reply to a text message or a <code>.txt</code> file.",
+                ))
         elif message.text and len(message.text.split(maxsplit=1)) > 1:
             text_to_parse = message.text.split(maxsplit=1)[1]
         else:
             return await message.answer(
-                "⚠️ usage: reply to a .txt with <code>/add</code>, "
-                "or send <code>/add &lt;text&gt;</code>"
+                _notice(
+                    "Usage",
+                    "Reply to a <code>.txt</code> file with <code>/add</code>, "
+                    "or send <code>/add &lt;text&gt;</code>."
+                )
             )
 
         parsed = parse_bulk_cookies(text_to_parse)
         if not parsed:
-            return await message.answer("⚠️ nothing to parse.")
+            return await message.answer(_notice(
+                    "No inventory found",
+                    "Add a supported inventory export or a <code>.txt</code> file.",
+                ))
 
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -89,7 +107,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
     @dp.message(Command("stats"))
     async def admin_stats(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
 
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -114,7 +132,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
     @dp.message(Command("stock"))
     async def admin_stock(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
 
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -122,7 +140,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             total = await inventory_repo.get_total_stock(conn)
 
         if not rows:
-            return await message.answer("📦 stock is empty.")
+            return await message.answer(_notice("Inventory empty", "There is currently nothing in stock."))
 
         await message.answer(build_stock_breakdown(
             [{"country": r["country"], "count": r["cnt"]} for r in rows],
@@ -132,7 +150,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
     @dp.message(Command("export"))
     async def admin_export(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
 
         parts = (message.text or "").split(maxsplit=1)
         country = parts[1].strip() if len(parts) > 1 else None
@@ -142,7 +160,7 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             texts = await inventory_repo.get_raw_texts_by_country(conn, country)
 
         if not texts:
-            return await message.answer("⚠️ nothing to export.")
+            return await message.answer(_notice("Nothing to export", "No inventory matches this request."))
 
         filename = f"export_{country.replace(' ', '_')}.txt" if country else "export_all.txt"
         os.makedirs(settings.BACKUP_DIR, exist_ok=True)
@@ -152,23 +170,30 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
 
         await message.answer_document(
             FSInputFile(path),
-            caption=sc_html(f"📤 exported <b>{len(texts)}</b> account(s)."),
+            caption=(
+                f"<b>◇ {sc_html('Export ready')}</b>\n"
+                f"{sc_html('Accounts')}  <b>{len(texts)}</b>"
+            ),
         )
 
     @dp.message(Command("broadcast"))
     async def admin_broadcast(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
 
         if not message.reply_to_message:
-            return await message.answer("⚠️ reply to a message with <code>/broadcast</code>")
+            return await message.answer(_notice(
+                "Broadcast needs a message",
+                "Reply to a message with <code>/broadcast</code> to send it.",
+            ))
 
         pool = get_pool()
         async with pool.acquire() as conn:
             user_ids = await user_repo.get_all_user_ids(conn)
 
         status = await message.answer(
-            f"📤 <b>Broadcasting</b>  to <b>{len(user_ids)}</b> user(s)…"
+            f"<b>◇ {sc_html('Broadcasting')}</b>\n"
+            f"{sc_html('Delivering to')}  <b>{len(user_ids)}</b> {sc_html('users')}…"
         )
 
         sent = failed = blocked = 0
@@ -198,51 +223,60 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
     @dp.message(Command("clear_country"))
     async def admin_clear_country(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
         parts = (message.text or "").split(maxsplit=1)
         if len(parts) < 2:
-            return await message.answer("usage: <code>/clear_country &lt;country&gt;</code>")
+            return await message.answer(_notice(
+                "Usage", "Use <code>/clear_country &lt;country&gt;</code>."
+            ))
         country = parts[1].strip()
         pool = get_pool()
         async with pool.acquire() as conn:
             async with conn.transaction():
                 deleted = await inventory_repo.delete_by_country(conn, country)
         await message.answer(
-            f"🗑 deleted <b>{deleted}</b> item(s) from <b>{esc(country)}</b>."
+            f"<b>◇ {sc_html('Inventory cleared')}</b>\n"
+            f"{sc_html('Removed')}  <b>{deleted}</b> {sc_html('items')}  ·  "
+            f"{esc(country)}"
         )
 
     @dp.message(Command("wipe"))
     async def admin_wipe(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
         args = (message.text or "").split(maxsplit=1)
         if len(args) < 2 or args[1].strip() != "CONFIRM":
             return await message.answer(
-                "⚠️ this deletes <b>all inventory</b>.\n"
-                "send <code>/wipe CONFIRM</code> to proceed."
+                "<b>◇ ᴄᴏɴꜰɪʀᴍ ɪɴᴠᴇɴᴛᴏʀʏ ʀᴇꜱᴇᴛ</b>\n"
+                "This deletes <b>all inventory</b>.\n"
+                "Send <code>/wipe CONFIRM</code> to proceed."
             )
         pool = get_pool()
         async with pool.acquire() as conn:
             async with conn.transaction():
                 deleted = await inventory_repo.delete_all(conn)
-        await message.answer(f"🗑 wiped <b>{deleted}</b> item(s).")
+        await message.answer(
+            f"<b>◇ {sc_html('Inventory wiped')}</b>\n"
+            f"{sc_html('Removed')}  <b>{deleted}</b> {sc_html('items')}"
+        )
 
     @dp.message(Command("givepoints"))
     async def admin_givepoints(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
         parts = (message.text or "").split()
         if len(parts) < 3:
-            return await message.answer(
-                "usage: <code>/givepoints &lt;user_id&gt; &lt;amount&gt;</code>"
-            )
+            return await message.answer(_notice(
+                    "Usage",
+                    "Use <code>/givepoints &lt;user_id&gt; &lt;amount&gt;</code>."
+                ))
         try:
             target_id = int(parts[1])
             amount = int(parts[2])
         except ValueError:
-            return await message.answer("⚠️ user_id and amount must be integers.")
+            return await message.answer(_notice("Invalid values", "The user ID and amount must be integers."))
         if amount == 0:
-            return await message.answer("⚠️ amount cannot be zero.")
+            return await message.answer(_notice("Invalid amount", "The amount cannot be zero."))
 
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -256,31 +290,35 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
     @dp.message(Command("ban"))
     async def admin_ban(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
         parts = (message.text or "").split()
         if len(parts) < 2:
-            return await message.answer("usage: <code>/ban &lt;user_id&gt;</code>")
+            return await message.answer(_notice("Usage", "Use <code>/ban &lt;user_id&gt;</code>."))
         try:
             target_id = int(parts[1])
         except ValueError:
-            return await message.answer("⚠️ user_id must be an integer.")
+            return await message.answer(_notice("Invalid user ID", "The user ID must be an integer."))
         pool = get_pool()
         async with pool.acquire() as conn:
             await user_repo.ban_user(conn, target_id)
-        await message.answer(f"🚫 user <code>{target_id}</code> banned.")
+        await message.answer(
+            f"<b>◇ {sc_html('User restricted')}</b>\n<code>{target_id}</code>"
+        )
 
     @dp.message(Command("unban"))
     async def admin_unban(message: Message):
         if not message.from_user or not _is_admin(message.from_user.id, settings):
-            return await message.answer("⛔️ unauthorized.")
+            return await message.answer(build_admin_only())
         parts = (message.text or "").split()
         if len(parts) < 2:
-            return await message.answer("usage: <code>/unban &lt;user_id&gt;</code>")
+            return await message.answer(_notice("Usage", "Use <code>/unban &lt;user_id&gt;</code>."))
         try:
             target_id = int(parts[1])
         except ValueError:
-            return await message.answer("⚠️ user_id must be an integer.")
+            return await message.answer(_notice("Invalid user ID", "The user ID must be an integer."))
         pool = get_pool()
         async with pool.acquire() as conn:
             await user_repo.unban_user(conn, target_id)
-        await message.answer(f"✅ user <code>{target_id}</code> unbanned.")
+        await message.answer(
+            f"<b>◇ {sc_html('User access restored')}</b>\n<code>{target_id}</code>"
+        )

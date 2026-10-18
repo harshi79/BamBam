@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal
 import sys
 
 from aiogram import Bot, Dispatcher
@@ -17,16 +16,16 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from app.config import Settings
-from app.database.connection import init_pool, close_pool, check_connection, get_pool
+from app.database.connection import check_connection, close_pool, get_pool, init_pool
 from app.database.migrations.runner import run_migrations
 from app.handlers import register_all
-from app.middleware.throttle import ThrottleMiddleware
 from app.health import start_health_server
+from app.middleware.throttle import ThrottleMiddleware
 
 
 def setup_logging(level: str, log_dir: str) -> None:
-    from logging.handlers import RotatingFileHandler
     import os
+    from logging.handlers import RotatingFileHandler
 
     os.makedirs(log_dir, exist_ok=True)
     log_level = getattr(logging, level.upper(), logging.INFO)
@@ -100,12 +99,12 @@ async def run_bot(settings: Settings) -> None:
         # Set bot commands
         from aiogram.types import BotCommand
         await bot.set_my_commands([
-            BotCommand(command="start", description="Start the bot"),
-            BotCommand(command="daily", description="Claim daily reward"),
-            BotCommand(command="profile", description="Your profile"),
-            BotCommand(command="history", description="Generation history"),
-            BotCommand(command="top", description="Top generators"),
-            BotCommand(command="referral", description="Your referral link"),
+            BotCommand(command="start", description="Open the YoriNetflix account desk"),
+            BotCommand(command="daily", description="Claim today's points"),
+            BotCommand(command="profile", description="View your account overview"),
+            BotCommand(command="history", description="Review your recent generations"),
+            BotCommand(command="top", description="View the all-time ranking"),
+            BotCommand(command="referral", description="Invite friends and earn points"),
         ])
 
         await bot.delete_webhook(drop_pending_updates=True)

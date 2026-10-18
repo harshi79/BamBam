@@ -6,16 +6,15 @@ from __future__ import annotations
 
 from aiogram import Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from app.config import Settings
 from app.database.connection import get_pool
-from app.database.repositories import user_repo
-from app.services.users import get_profile_data
-from app.services.limits import check_daily_limit
 from app.keyboards.inline import main_menu_kb
-from app.utils.messaging import ack, safe_edit
+from app.services.limits import check_daily_limit
+from app.services.users import get_profile_data
 from app.utils.formatting import build_profile_text
+from app.utils.messaging import ack, safe_edit
 
 
 def register(dp: Dispatcher, settings: Settings):
@@ -25,7 +24,7 @@ def register(dp: Dispatcher, settings: Settings):
         async with pool.acquire() as conn:
             data = await get_profile_data(conn, user.id)
             if not data:
-                return "no profile data found. send /start first."
+                return "<b>◇ ᴘʀᴏꜰɪʟᴇ ɴᴏᴛ ꜰᴏᴜɴᴅ</b>\nSend /start first to create your profile."
             dl_ok, dl_remaining = await check_daily_limit(
                 conn, user.id, settings.DAILY_GENERATION_LIMIT
             )

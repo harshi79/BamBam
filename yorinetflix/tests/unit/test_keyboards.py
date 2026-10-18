@@ -3,8 +3,12 @@ YoriNetflix — Keyboard builder tests.
 """
 
 from app.keyboards.inline import (
-    main_menu_kb, back_to_menu_kb, join_kb,
-    country_list_kb, cookie_action_kb, history_nav_kb,
+    back_to_menu_kb,
+    cookie_action_kb,
+    country_list_kb,
+    history_nav_kb,
+    join_kb,
+    main_menu_kb,
 )
 
 
@@ -32,6 +36,21 @@ class TestMainMenuKb:
     def test_button_count(self):
         kb = main_menu_kb()
         assert len(kb.inline_keyboard) == 3  # gen, daily+profile, history+referral
+
+    def test_callback_contract_is_unchanged(self):
+        kb = main_menu_kb()
+        callbacks = [
+            button.callback_data
+            for row in kb.inline_keyboard
+            for button in row
+            if button.callback_data
+        ]
+        assert callbacks == ["gen:0", "daily", "profile", "history:1", "referral"]
+
+    def test_labels_use_symbols_instead_of_classic_emojis(self):
+        labels = _all_texts(main_menu_kb())
+        classic_emojis = ("🍿", "🎁", "📊", "🕘", "🔗")
+        assert all(emoji not in label for emoji in classic_emojis for label in labels)
 
 
 class TestBackToMenuKb:

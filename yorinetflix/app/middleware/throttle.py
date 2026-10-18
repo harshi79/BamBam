@@ -12,7 +12,7 @@ from collections import OrderedDict
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from app.utils.messaging import safe_answer
 
@@ -46,7 +46,7 @@ class ThrottleMiddleware(BaseMiddleware):
             if isinstance(event, CallbackQuery):
                 # Still acknowledge the press, otherwise the dropped button
                 # keeps spinning and looks broken to the user.
-                await safe_answer(event, "⏳ slow down.")
+                await safe_answer(event, "Please wait a moment before trying again.")
                 return None
 
         self.last[user.id] = now

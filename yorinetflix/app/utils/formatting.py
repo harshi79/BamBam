@@ -1,20 +1,31 @@
 """
-YoriNetflix — Message formatting builders.
+YoriNetflix — message formatting builders.
 
-Polished, consistent presentation for all user-facing messages.
-Uses Telegram HTML formatting: bold, blockquote, inline code, italic.
-Preserves small-caps branding for section headings.
+A refined, text-first identity for Telegram: small-caps section headings,
+quiet geometric accents, generous spacing, and Telegram-supported HTML only.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.utils.text import sc, sc_html, esc
+from app.utils.text import esc, sc, sc_html
 
 DEFAULT_TV_URL = "https://www.netflix.com/tv2"
 DEFAULT_PC_URL = "https://www.netflix.com/account"
 DEFAULT_MOBILE_URL = "https://www.netflix.com/login"
+
+_RULE = "┄┄┄┄┄┄┄┄┄┄┄"
+
+
+def _heading(title: str) -> str:
+    """Render a consistent small-caps screen title."""
+    return f"<b>◇ {sc_html(title)}</b>"
+
+
+def _section(title: str) -> str:
+    """Render a small-caps section label."""
+    return f"<b>{sc_html(title)}</b>"
 
 
 # ── Welcome ────────────────────────────────────────────────────
@@ -22,9 +33,10 @@ DEFAULT_MOBILE_URL = "https://www.netflix.com/login"
 
 def build_welcome_text() -> str:
     return (
-        f"<blockquote>{sc_html('welcome to yorinetflix')}</blockquote>\n\n"
-        f"{sc_html('get premium accounts')} · free, instant, no strings.\n\n"
-        f"<i>tap a button below to begin.</i>"
+        f"<b>✦ {sc_html('yorinetflix')}</b>\n"
+        f"<blockquote>{sc_html('welcome to the premium account desk')}</blockquote>\n\n"
+        f"{sc_html('premium accounts · free · instant · no strings')}\n\n"
+        f"<i>Choose a destination below to begin.</i>"
     )
 
 
@@ -51,20 +63,22 @@ def build_profile_text(
         remaining = max(0, int(cooldown_seconds - elapsed))
     else:
         remaining = 0
-    cd_text = f"{remaining}s" if remaining else "ready ✅"
+    cd_text = f"{remaining}s" if remaining else sc("ready")
 
     daily_text = f"{daily_remaining}/{daily_limit}" if daily_limit > 0 else "∞"
 
     return (
-        f"{sc_html('your profile')}\n\n"
-        f"👤 <b>{esc(full_name)}</b>\n"
-        f"🆔 <code>{user_id}</code>  ·  📅 <i>{joined_str}</i>\n\n"
-        f"━━━━━━━━━━━━\n\n"
-        f"🍿 Generated  <b>{total_generated}</b>\n"
-        f"🌍 Countries  <b>{unique_countries}</b>\n"
-        f"⏳ Cooldown  <b>{cd_text}</b>\n"
-        f"📊 Today  <b>{daily_text}</b>\n"
-        f"💰 Points  <b>{points}</b>"
+        f"{_heading('Your profile')}\n\n"
+        f"<blockquote><b>{esc(full_name)}</b>\n"
+        f"<code>{user_id}</code>  ·  {sc_html('member since')} "
+        f"<i>{joined_str}</i></blockquote>\n\n"
+        f"{_RULE}\n"
+        f"{_section('Account overview')}\n"
+        f"·  {sc_html('Generated')}  <b>{total_generated}</b>\n"
+        f"·  {sc_html('Countries')}  <b>{unique_countries}</b>\n"
+        f"·  {sc_html('Cooldown')}  <b>{cd_text}</b>\n"
+        f"·  {sc_html('Today')}  <b>{daily_text}</b>\n"
+        f"·  {sc_html('Points')}  <b>{points}</b>"
     )
 
 
@@ -82,21 +96,24 @@ def build_account_message(
     cookie_str = build_cookie_string(netflix_id, secure_id)
 
     parts = [
-        f"🎬 <b>{esc(country)}</b>",
-        "",
+        f"<b>◇ {esc(country)}</b>  ·  {sc_html('Netflix access')}",
+        _RULE,
     ]
     if info:
-        parts.append(f"<blockquote>{esc(info)}</blockquote>")
+        parts.extend(["", f"<blockquote>{esc(info)}</blockquote>"])
 
     if cookie_str:
-        parts.append("")
-        parts.append(f"🍪 <b>Cookie</b>  <i>(tap to copy)</i>")
-        parts.append(f"<blockquote><code>{esc(cookie_str)}</code></blockquote>")
+        parts.extend([
+            "",
+            f"{_section('Cookie')}  <i>{sc_html('tap to copy')}</i>",
+            f"<blockquote><code>{esc(cookie_str)}</code></blockquote>",
+        ])
 
     parts.extend([
         "",
-        f"📦 <b>{remaining}</b> remaining for {esc(country)}",
-        f"<blockquote>tap a button below to open the login page.</blockquote>",
+        _RULE,
+        f"<b>{remaining}</b> {sc_html('remaining')}  ·  {esc(country)}",
+        f"<i>{sc_html('Use a route below to open sign-in.')}</i>",
     ])
     return "\n".join(parts)
 
@@ -106,18 +123,19 @@ def build_account_message(
 
 def build_daily_reward_text(points: int, balance: int, next_claim_hours: int) -> str:
     return (
-        f"🎁 <b>Daily Reward</b>\n\n"
-        f"💰 earned  <b>+{points}</b> points\n"
-        f"📊 balance  <b>{balance}</b> points\n\n"
-        f"<blockquote>next claim in ~{next_claim_hours}h</blockquote>"
+        f"{_heading('Daily reward')}\n\n"
+        f"<blockquote>+<b>{points}</b> {sc_html('points credited')}</blockquote>\n\n"
+        f"{_section('New balance')}  <code>{balance}</code> {sc_html('points')}\n"
+        f"{_RULE}\n"
+        f"<i>Next claim in approximately {next_claim_hours} hours.</i>"
     )
 
 
 def build_daily_already_claimed(hours_remaining: int) -> str:
     return (
-        f"⏳ <b>Already Claimed</b>\n\n"
-        f"<blockquote>you've already claimed today's reward.\n"
-        f"come back in ~{hours_remaining}h.</blockquote>"
+        f"{_heading('Already claimed')}\n\n"
+        f"<blockquote>You have already claimed today's reward.\n"
+        f"Come back in approximately {hours_remaining} hours.</blockquote>"
     )
 
 
@@ -131,12 +149,13 @@ def build_referral_text(
     reward_points: int,
 ) -> str:
     return (
-        f"🔗 <b>Referral</b>\n\n"
-        f"<code>{esc(link)}</code>\n\n"
-        f"👥 referrals  <b>{referral_count}</b>\n"
-        f"💰 points  <b>{balance}</b>\n\n"
-        f"<blockquote>share your link — earn <b>{reward_points} pts</b> "
-        f"for each new user.</blockquote>"
+        f"{_heading('Your referral link')}\n\n"
+        f"<blockquote><code>{esc(link)}</code></blockquote>\n\n"
+        f"{_RULE}\n"
+        f"{sc_html('Successful referrals')}  <b>{referral_count}</b>\n"
+        f"{sc_html('Points balance')}  <b>{balance}</b>\n\n"
+        f"<i>Share your link and earn <b>{reward_points} pts</b> "
+        f"for each new user.</i>"
     )
 
 
@@ -145,9 +164,8 @@ def build_referral_text(
 
 def build_history_empty() -> str:
     return (
-        f"🕘 <b>History</b>\n\n"
-        f"<blockquote>no generations yet.\n"
-        f"generate an account to see it here.</blockquote>"
+        f"{_heading('Generation history')}\n\n"
+        f"<blockquote>No generations yet.\nYour first account will appear here.</blockquote>"
     )
 
 
@@ -157,10 +175,23 @@ def build_history_page(
     total_pages: int,
     total: int,
 ) -> str:
-    lines = [f"🕘 <b>History</b>\n"]
-    for e in entries:
-        lines.append(f"• <b>{esc(e['country'])}</b>  <i>{e['when']}</i>")
-    lines.append(f"\n📄 page <b>{page}</b>/<b>{total_pages}</b>  ·  total <b>{total}</b>")
+    first_index = (page - 1) * 10 + 1
+    lines = [
+        _heading('Generation history'),
+        f"<i>{sc_html('Most recent first')}</i>",
+        "",
+    ]
+    for index, entry in enumerate(entries, start=first_index):
+        lines.append(
+            f"<code>{index:02d}</code>  <b>{esc(entry['country'])}</b>"
+            f"  ·  <i>{esc(entry['when'])}</i>"
+        )
+    lines.extend([
+        "",
+        _RULE,
+        f"<code>{page:02d} / {total_pages:02d}</code>  ·  "
+        f"{sc_html('Entries')}  <b>{total}</b>",
+    ])
     return "\n".join(lines)
 
 
@@ -168,17 +199,23 @@ def build_history_page(
 
 
 def build_leaderboard(entries: list[dict]) -> str:
-    medals = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
-    lines = [f"🏆 <b>Top Generators</b>\n"]
-    for i, e in enumerate(entries):
-        lines.append(f"{medals[i]}  <b>{esc(e['name'])}</b>  —  {e['total']}")
+    lines = [
+        _heading('Top generators'),
+        f"<i>{sc_html('All-time ranking')}</i>",
+        "",
+    ]
+    for rank, entry in enumerate(entries, start=1):
+        lines.append(
+            f"<code>{rank:02d}</code>  <b>{esc(entry['name'])}</b>"
+            f"  ·  <b>{entry['total']}</b> {sc_html('generations')}"
+        )
     return "\n".join(lines)
 
 
 def build_leaderboard_empty() -> str:
     return (
-        f"🏆 <b>Top Generators</b>\n\n"
-        f"<blockquote>no generations yet.</blockquote>"
+        f"{_heading('Top generators')}\n\n"
+        f"<blockquote>No generations have been recorded yet.</blockquote>"
     )
 
 
@@ -187,50 +224,59 @@ def build_leaderboard_empty() -> str:
 
 def build_country_list_text(total: int, num_countries: int) -> str:
     return (
-        f"🌍 <b>Select a Country</b>\n\n"
-        f"📦 total in stock: <b>{total}</b>\n"
-        f"🗂 countries: <b>{num_countries}</b>"
+        f"{_heading('Select a country')}\n\n"
+        f"<blockquote>Choose a country to browse available stock.</blockquote>\n\n"
+        f"<code>{total}</code> {sc_html('accounts in stock')}  ·  "
+        f"<code>{num_countries}</code> {sc_html('countries')}"
     )
 
 
 def build_country_empty() -> str:
     return (
-        f"❌ <b>Out of Stock</b>\n\n"
-        f"<blockquote>no inventory available right now.\ncheck back later.</blockquote>"
+        f"{_heading('Inventory unavailable')}\n\n"
+        f"<blockquote>There are no accounts available at the moment.\n"
+        f"Please check back later.</blockquote>"
     )
 
 
-# ── FSUB ───────────────────────────────────────────────────────
+# ── Force Subscription ─────────────────────────────────────────
 
 
 def build_fsub_prompt() -> str:
     return (
-        f"🚪 <b>Channel Required</b>\n\n"
-        f"<blockquote>to use this bot, please join our channel first.</blockquote>"
+        f"{_heading('Channel access required')}\n\n"
+        f"<blockquote>Join our channel to use the account desk, then verify below.</blockquote>"
     )
 
 
 # ── Admin Messages ─────────────────────────────────────────────
 
 
+def build_admin_only() -> str:
+    return (
+        f"{_heading('Admin access only')}\n"
+        f"This control is reserved for administrators."
+    )
+
+
 def build_admin_help() -> str:
     return (
-        f"🛠 <b>Admin Commands</b>\n\n"
-        f"📋 <b>Inventory</b>\n"
-        f"  /add — add inventory (.txt or text)\n"
-        f"  /stock — stock breakdown\n"
-        f"  /export [category] — export to file\n"
-        f"  /clear_country — wipe one category\n"
-        f"  /wipe CONFIRM — delete all inventory\n\n"
-        f"📊 <b>Analytics</b>\n"
-        f"  /stats — bot statistics\n\n"
-        f"👥 <b>Users</b>\n"
-        f"  /givepoints — adjust user points\n"
-        f"  /ban — ban a user\n"
-        f"  /unban — unban a user\n\n"
-        f"📢 <b>Communication</b>\n"
-        f"  /broadcast — message all users\n\n"
-        f"ℹ️  /admin — this menu"
+        f"{_heading('Admin console')}\n"
+        f"<i>{sc_html('Operations · authorized access')}</i>\n\n"
+        f"{_section('Inventory')}\n"
+        f"<code>/add</code>  Add inventory (.txt or text)\n"
+        f"<code>/stock</code>  View the stock breakdown\n"
+        f"<code>/export [category]</code>  Export inventory\n"
+        f"<code>/clear_country</code>  Remove one category\n"
+        f"<code>/wipe CONFIRM</code>  Delete all inventory\n\n"
+        f"{_section('Analytics')}\n"
+        f"<code>/stats</code>  View bot statistics\n\n"
+        f"{_section('Users')}\n"
+        f"<code>/givepoints</code>  Adjust a points balance\n"
+        f"<code>/ban</code> · <code>/unban</code>  Manage access\n\n"
+        f"{_section('Communication')}\n"
+        f"<code>/broadcast</code>  Message all users\n\n"
+        f"<i><code>/admin</code> opens this console.</i>"
     )
 
 
@@ -245,60 +291,70 @@ def build_admin_stats(
     top_stock: list[dict],
 ) -> str:
     top_lines = "\n".join(
-        f"  • {esc(r['country'])} — {r['count']}" for r in top_stock
-    ) or "  —"
+        f"·  {esc(row['country'])}  <b>{row['count']}</b>" for row in top_stock
+    ) or "·  —"
 
     return (
-        f"📊 <b>Bot Statistics</b>\n\n"
-        f"🍿 <b>Stock</b>\n"
-        f"  • accounts: <b>{total_stock}</b>\n"
-        f"  • countries: <b>{total_countries}</b>\n\n"
-        f"👥 <b>Users</b>\n"
-        f"  • total: <b>{total_users}</b>\n"
-        f"  • active (24h): <b>{active_24h}</b>\n\n"
-        f"🎁 <b>Generations</b>\n"
-        f"  • all time: <b>{total_gens}</b>\n"
-        f"  • last 24h: <b>{gens_24h}</b>\n"
-        f"  • last 7d: <b>{gens_7d}</b>\n\n"
-        f"<b>Top Stock</b>\n{top_lines}"
+        f"{_heading('Bot overview')}\n\n"
+        f"{_section('Inventory')}\n"
+        f"·  {sc_html('Accounts')}  <b>{total_stock}</b>\n"
+        f"·  {sc_html('Countries')}  <b>{total_countries}</b>\n\n"
+        f"{_RULE}\n"
+        f"{_section('Community')}\n"
+        f"·  {sc_html('Users')}  <b>{total_users}</b>\n"
+        f"·  {sc_html('Active · 24h')}  <b>{active_24h}</b>\n\n"
+        f"{_RULE}\n"
+        f"{_section('Generations')}\n"
+        f"·  {sc_html('All time')}  <b>{total_gens}</b>\n"
+        f"·  {sc_html('Last 24h')}  <b>{gens_24h}</b>\n"
+        f"·  {sc_html('Last 7d')}  <b>{gens_7d}</b>\n\n"
+        f"{_section('Top stock')}\n{top_lines}"
     )
 
 
 def build_stock_breakdown(entries: list[dict], total: int) -> str:
-    lines = [f"📦 <b>Stock Breakdown</b>\n"]
-    for r in entries:
-        lines.append(f"• {esc(r['country'])} — <b>{r['count']}</b>")
-    lines.append(f"\n<b>Total:</b> {total}")
+    lines = [
+        _heading('Stock overview'),
+        f"<i>{len(entries)} {sc_html('countries')}  ·  {total} {sc_html('accounts')}</i>",
+        _RULE,
+    ]
+    for row in entries:
+        lines.append(f"{esc(row['country'])}  ·  <b>{row['count']}</b>")
+    lines.extend([_RULE, f"{_section('Total')}  <b>{total}</b>"])
     return "\n".join(lines)
 
 
 def build_add_result(added: int, dupes: int) -> str:
     return (
-        f"✅ added <b>{added}</b> item(s).\n"
-        f"♻️ skipped <b>{dupes}</b> duplicate(s)."
+        f"{_heading('Inventory updated')}\n\n"
+        f"{sc_html('Added')}  <b>{added}</b> {sc_html('items')}\n"
+        f"{sc_html('Duplicates skipped')}  <b>{dupes}</b>"
     )
 
 
 def build_givepoints_result(target_id: int, amount: int, new_balance: int) -> str:
     return (
-        f"✅ adjusted <code>{target_id}</code> by <b>{amount:+d}</b> points.\n"
-        f"💰 new balance: <b>{new_balance}</b>"
+        f"{_heading('Points adjusted')}\n\n"
+        f"<code>{target_id}</code>  ·  {amount:+d} {sc_html('points')}\n"
+        f"{_section('New balance')}  <b>{new_balance}</b>"
     )
 
 
 def build_broadcast_progress(sent: int, failed: int, blocked: int) -> str:
     return (
-        f"📤 <b>Broadcasting…</b>\n\n"
-        f"✅ {sent}  ·  ❌ {failed}  ·  🚫 {blocked}"
+        f"{_heading('Broadcast in progress')}\n\n"
+        f"{sc_html('Sent')}  <b>{sent}</b>  ·  "
+        f"{sc_html('Failed')}  <b>{failed}</b>  ·  "
+        f"{sc_html('Blocked')}  <b>{blocked}</b>"
     )
 
 
 def build_broadcast_complete(sent: int, failed: int, blocked: int) -> str:
     return (
-        f"✅ <b>Broadcast Complete</b>\n\n"
-        f"📬 sent: <b>{sent}</b>\n"
-        f"❌ failed: <b>{failed}</b>\n"
-        f"🚫 blocked: <b>{blocked}</b>"
+        f"{_heading('Broadcast complete')}\n\n"
+        f"{sc_html('Delivered')}  <b>{sent}</b>\n"
+        f"{sc_html('Failed')}  <b>{failed}</b>\n"
+        f"{sc_html('Blocked')}  <b>{blocked}</b>"
     )
 
 
@@ -307,6 +363,7 @@ def build_broadcast_complete(sent: int, failed: int, blocked: int) -> str:
 
 def clean_info_block(raw_text: str) -> str:
     import re
+
     URL_LINE_RE = re.compile(r"^\s*[•\-]?\s*(PC|Phone|TV)\s*Login URL\s*:", re.I)
     COOKIE_LINE_RE = re.compile(r"^\s*🍪\s*Cookie\s*:", re.I)
     SECURE_LINE_RE = re.compile(r"^\s*🔐\s*SecureNetflixId\s*:", re.I)
