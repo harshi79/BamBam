@@ -17,6 +17,7 @@ from app.services.points import credit
 from app.services.referrals import get_referral_link, get_referral_stats
 from app.keyboards.inline import back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
+from app.utils.messaging import ack, respond
 from app.utils.formatting import (
     build_daily_reward_text, build_daily_already_claimed, build_referral_text,
 )
@@ -29,7 +30,12 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
     async def cmd_daily(event: Message | CallbackQuery):
         user = event.from_user
         if not user:
-            return
+            return await ack(event)
+
+        # Clear the button spinner before the database round-trip.
+        await ack(event)
+
+        balance = 0
         pool = get_pool()
 
         async with pool.acquire() as conn:
@@ -53,26 +59,25 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             settings.DAILY_REWARD_POINTS, balance, 24
         ) if claimed else build_daily_already_claimed(24)
 
-        if isinstance(event, CallbackQuery):
-            try:
-                await event.message.edit_text(
-                    text, reply_markup=back_to_menu_kb(), disable_web_page_preview=True
-                )
-            except Exception:
-                pass
-            await event.answer()
-        else:
-            await event.answer(text, reply_markup=back_to_menu_kb())
+        await respond(event, text, back_to_menu_kb(), bot=bot)
 
     @dp.message(Command("referral"))
     @dp.callback_query(F.data == "referral")
     async def cmd_referral(event: Message | CallbackQuery):
         user = event.from_user
         if not user:
-            return
+            return await ack(event)
 
-        bot_info = await bot.get_me()
-        link = get_referral_link(bot_info.username, user.id)
+        # Clear the button spinner before the database round-trip.
+        await ack(event)
+
+        # `bot.me` is aiogram's *cached* getMe; calling `bot.get_me()` here made
+        # a live Telegram round-trip on every single button press.
+        bot_info = await bot.me()
+        # get_referral_link is a coroutine — it must be awaited, otherwise the
+        # coroutine repr lands inside <code>…</code> and Telegram rejects the
+        # whole message with "can't parse entities: Unsupported start tag".
+        link = await get_referral_link(bot_info.username, user.id)
 
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -86,13 +91,4 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             reward_points=settings.REFERRAL_REWARD_POINTS,
         )
 
-        if isinstance(event, CallbackQuery):
-            try:
-                await event.message.edit_text(
-                    text, reply_markup=back_to_menu_kb(), disable_web_page_preview=True
-                )
-            except Exception:
-                pass
-            await event.answer()
-        else:
-            await event.answer(text, reply_markup=back_to_menu_kb())
+        await respond(event, text, back_to_menu_kb(), bot=bot)

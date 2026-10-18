@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message, FSInputFile
-from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter, TelegramForbiddenError
+from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
 
 from app.config import Settings
 from app.database.connection import get_pool
@@ -23,6 +23,7 @@ from app.database.repositories import (
 from app.services.inventory import parse_bulk_cookies, add_inventory
 from app.services.points import admin_adjust
 from app.utils.text import sc, sc_html, esc
+from app.utils.messaging import safe_edit
 from app.utils.formatting import (
     build_admin_help, build_admin_stats, build_stock_breakdown,
     build_add_result, build_givepoints_result,
@@ -189,12 +190,10 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
             await asyncio.sleep(0.05)
 
             if (sent + failed + blocked) % 25 == 0:
-                try:
-                    await status.edit_text(build_broadcast_progress(sent, failed, blocked))
-                except TelegramBadRequest:
-                    pass
+                await safe_edit(status, build_broadcast_progress(sent, failed, blocked))
 
-        await status.edit_text(build_broadcast_complete(sent, failed, blocked))
+        # Never let a progress-message edit failure mask a completed broadcast.
+        await safe_edit(status, build_broadcast_complete(sent, failed, blocked))
 
     @dp.message(Command("clear_country"))
     async def admin_clear_country(message: Message):
