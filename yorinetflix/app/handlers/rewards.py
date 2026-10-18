@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 
 from app.config import Settings

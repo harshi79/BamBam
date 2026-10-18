@@ -5,6 +5,7 @@ YoriNetflix — Profile handler.
 from __future__ import annotations
 
 from aiogram import Dispatcher, F
+from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 
 from app.config import Settings
