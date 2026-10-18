@@ -25,18 +25,25 @@ async def _handle_request(
             if not line or line in (b"\r\n", b"\n") or header_bytes > 8192:
                 break
 
-        if len(parts) >= 2 and parts[0] == "GET" and parts[1].split("?", 1)[0] in ("/", "/healthz"):
-            status, body = "200 OK", b"ok\n"
+        is_health_request = (
+            len(parts) >= 2
+            and parts[0] == "GET"
+            and parts[1].split("?", 1)[0] in ("/", "/healthz")
+        )
+        if is_health_request:
+            status, body = "200 OK", b'{"status":"ok"}'
+            content_type = "application/json"
         else:
             status, body = "404 Not Found", b"not found\n"
+            content_type = "text/plain; charset=utf-8"
 
-        writer.write(
+        response_headers = (
             f"HTTP/1.1 {status}\r\n"
-            "Content-Type: text/plain; charset=utf-8\r\n"
+            f"Content-Type: {content_type}\r\n"
             f"Content-Length: {len(body)}\r\n"
-            "Connection: close\r\n\r\n".encode("ascii")
-            + body
-        )
+            "Connection: close\r\n\r\n"
+        ).encode("ascii")
+        writer.write(response_headers + body)
         await writer.drain()
     except (asyncio.TimeoutError, ConnectionError):
         # Health probes and scanners may disconnect without sending a full request.

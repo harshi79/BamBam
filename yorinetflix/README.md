@@ -23,9 +23,9 @@ A production-ready Telegram bot for distributing authorized digital inventory wi
 
 ## Deploying on Render
 
-The root Docker image runs the bot and a small HTTP health-check listener together. When creating a Render **Web Service**, use the repository root as the Docker build context and keep the default Dockerfile/entrypoint. The app binds to `0.0.0.0:$PORT` (defaulting to `10000` locally); `/healthz` and `/` return `200 OK` for platform health checks. Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL` in the service environment as usual.
+The root Docker image runs the bot and a small, non-blocking HTTP health-check listener together. When creating a Render **Web Service**, use the repository root as the Docker build context and keep the default Dockerfile/entrypoint. Configure Render's health-check path as **`/healthz`** (GET); `https://<your-service>.onrender.com/healthz` returns HTTP `200 OK` with `Content-Type: application/json` and the body `{"status":"ok"}`. The root path `/` remains an alias. This static response does not query the database or make external calls. The listener binds to `0.0.0.0:$PORT` (defaulting to `10000` locally). Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL` in the service environment as usual.
 
-Do not replace the Docker command with only `python -m app.main` from a different working directory; the root entrypoint selects this production app when the required environment variables are present.
+For the root Docker deployment, keep the Dockerfile's default startup command, **`docker-entrypoint.sh`**. With the YoriNetflix environment variables set, that entrypoint runs `cd /app/yorinetflix && python -m app.main`. To run directly from a checkout, use `cd yorinetflix && python -m app.main`.
 
 ## Quick Start
 
