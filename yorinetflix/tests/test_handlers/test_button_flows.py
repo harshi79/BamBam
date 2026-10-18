@@ -354,6 +354,112 @@ class TestDailyButton:
         _assert_supported_html(session.sent_texts[0])
 
 
+# ── Country selection ─────────────────────────────────────────
+
+# Telegram rejects the whole keyboard (BUTTON_DATA_INVALID) when any button's
+# callback_data exceeds this many bytes.
+TELEGRAM_CALLBACK_DATA_LIMIT = 64
+
+LONG_COUNTRY = "🇹🇭 สาธารณรัฐประชาธิปไตยประชาชนลาว"  # > 64 bytes of UTF-8 on its own
+COUNTRY_STOCK = [
+    {"country": "India", "count": 3},
+    {"country": LONG_COUNTRY, "count": 1},
+]
+FAKE_COOKIE = {
+    "id": 42,
+    "raw_text": "📁 Source: test\n🌍 Country: X\n💳 Plan: Premium",
+    "pc_url": "", "phone_url": "", "tv_url": "",
+    "netflix_id": "abc", "secure_netflix_id": "def",
+}
+
+
+@pytest.fixture
+def stocked_env(bot_env, monkeypatch):
+    """bot_env plus inventory for two countries, one with an oversize name."""
+    monkeypatch.setattr(
+        generation.inventory, "get_country_stock", AsyncMock(return_value=COUNTRY_STOCK)
+    )
+    # resolve_country reads the repository directly (asyncpg records → dicts here).
+    monkeypatch.setattr(
+        generation.inventory.inventory_repo, "get_country_stock",
+        AsyncMock(return_value=[{"country": c["country"], "cnt": c["count"]} for c in COUNTRY_STOCK]),
+    )
+    picked: list[str] = []
+
+    async def fake_pick(conn, country):
+        picked.append(country)
+        return FAKE_COOKIE
+
+    monkeypatch.setattr(generation.inventory, "pick_account", fake_pick)
+    monkeypatch.setattr(generation.history_repo, "add", AsyncMock(return_value=None))
+    return (*bot_env, picked)
+
+
+def _pick_buttons(markup):
+    return [
+        b for row in markup.inline_keyboard for b in row
+        if b.callback_data and b.callback_data.startswith("pick:")
+    ]
+
+
+class TestCountryButtons:
+    async def test_country_page_keyboard_is_within_telegram_limits(self, stocked_env):
+        """Regression: a country whose name is longer than 64 bytes used to be
+        placed verbatim in callback_data, so Telegram refused the whole page."""
+        settings, bot, session, _ = stocked_env
+        dp = Dispatcher()
+        generation.register(dp, settings)
+
+        await dp.feed_update(bot, _callback_update("gen:1"))
+
+        edits = session.of_type(EditMessageText)
+        assert edits, "the country page must render"
+        buttons = _pick_buttons(edits[0].reply_markup)
+        assert [b.text for b in buttons] == [f"◇ India  ·  3", f"◇ {LONG_COUNTRY}  ·  1"]
+        for button in buttons:
+            assert len(button.callback_data.encode("utf-8")) <= TELEGRAM_CALLBACK_DATA_LIMIT
+
+    async def test_pressing_long_named_country_delivers_that_country(self, stocked_env):
+        settings, bot, session, picked = stocked_env
+        dp = Dispatcher()
+        generation.register(dp, settings)
+
+        await dp.feed_update(bot, _callback_update("gen:1", update_id=1))
+        button = _pick_buttons(session.of_type(EditMessageText)[0].reply_markup)[1]
+        assert LONG_COUNTRY in button.text
+
+        await dp.feed_update(bot, _callback_update(button.callback_data, update_id=2))
+
+        assert picked == [LONG_COUNTRY], "the exact stocked country must be allocated"
+        assert session.sent_texts and LONG_COUNTRY in session.sent_texts[0]
+        _assert_supported_html(session.sent_texts[0])
+        answers = session.of_type(AnswerCallbackQuery)
+        assert answers and "Delivered" in (answers[-1].text or "")
+
+    async def test_legacy_keyboard_with_raw_country_name_still_works(self, stocked_env):
+        """Country lists sent by the previous build carry ``pick:<name>``."""
+        settings, bot, session, picked = stocked_env
+        dp = Dispatcher()
+        generation.register(dp, settings)
+
+        await dp.feed_update(bot, _callback_update("pick:India"))
+
+        assert picked == ["India"]
+        assert session.sent_texts and "India" in session.sent_texts[0]
+
+    async def test_unknown_or_sold_out_country_is_answered(self, stocked_env):
+        settings, bot, session, picked = stocked_env
+        dp = Dispatcher()
+        generation.register(dp, settings)
+
+        await dp.feed_update(bot, _callback_update("pick:deadbeefdeadbeef"))
+
+        assert picked == []
+        assert not session.sent_texts
+        answers = session.of_type(AnswerCallbackQuery)
+        assert answers and "No stock" in (answers[-1].text or "")
+
+
 # ── Navigation, pagination and unknown callbacks ──────────────
 
 

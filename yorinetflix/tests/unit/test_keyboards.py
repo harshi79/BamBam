@@ -10,10 +10,32 @@ from app.keyboards.inline import (
     join_kb,
     main_menu_kb,
 )
+from app.services.inventory import country_key
+
+# Telegram rejects the whole keyboard (BUTTON_DATA_INVALID) if any single
+# button's callback_data is longer than this many bytes.
+TELEGRAM_CALLBACK_DATA_LIMIT = 64
+
+# Country names as cookie checkers really emit them: long official names,
+# flag emojis (8 bytes each) and non-Latin scripts (2–4 bytes per character).
+AWKWARD_COUNTRY_NAMES = [
+    "United Kingdom of Great Britain and Northern Ireland",
+    "🇸🇦 المملكة العربية السعودية",
+    "🇹🇭 สาธารณรัฐประชาธิปไตยประชาชนลาว",
+    "United States (US) | 🏙 City: New York | ⏰ TZ: America/New_York",
+    "Côte d'Ivoire",
+]
 
 
 def _all_texts(kb):
     return [b.text for row in kb.inline_keyboard for b in row]
+
+
+def _pick_buttons(kb):
+    return [
+        b for row in kb.inline_keyboard for b in row
+        if b.callback_data and b.callback_data.startswith("pick:")
+    ]
 
 
 class TestMainMenuKb:
@@ -85,6 +107,34 @@ class TestCountryListKb:
     def test_empty_countries(self):
         kb = country_list_kb([], 1, 12)
         assert len(kb.inline_keyboard) >= 1
+
+    def test_one_button_per_country_with_name_and_count(self):
+        countries = [{"country": name, "count": i + 1} for i, name in enumerate(AWKWARD_COUNTRY_NAMES)]
+        kb = country_list_kb(countries, 1, 12)
+        texts = [b.text for b in _pick_buttons(kb)]
+        assert len(texts) == len(AWKWARD_COUNTRY_NAMES)
+        for i, name in enumerate(AWKWARD_COUNTRY_NAMES):
+            assert name in texts[i] and str(i + 1) in texts[i]
+
+    def test_callback_data_fits_telegram_limit_for_any_country_name(self):
+        """Regression: long / emoji / non-Latin country names used to be
+        embedded verbatim in callback_data, blowing Telegram's 64-byte cap and
+        making the whole country page fail to render."""
+        countries = [{"country": name, "count": 1} for name in AWKWARD_COUNTRY_NAMES]
+        kb = country_list_kb(countries, 1, 12)
+        buttons = _pick_buttons(kb)
+        assert len(buttons) == len(AWKWARD_COUNTRY_NAMES)
+        for button in buttons:
+            size = len(button.callback_data.encode("utf-8"))
+            assert size <= TELEGRAM_CALLBACK_DATA_LIMIT, (button.text, size)
+
+    def test_pick_payload_is_the_country_key(self):
+        countries = [{"country": name, "count": 1} for name in AWKWARD_COUNTRY_NAMES]
+        kb = country_list_kb(countries, 1, 12)
+        payloads = [b.callback_data for b in _pick_buttons(kb)]
+        assert payloads == [f"pick:{country_key(name)}" for name in AWKWARD_COUNTRY_NAMES]
+        # Distinct countries must never share a button payload.
+        assert len(set(payloads)) == len(payloads)
 
 
 class TestCookieActionKb:

@@ -10,6 +10,7 @@ from math import ceil
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.services.inventory import country_key
 from app.utils.formatting import DEFAULT_MOBILE_URL, DEFAULT_PC_URL, DEFAULT_TV_URL, normalize_url
 
 
@@ -51,9 +52,11 @@ def country_list_kb(
     start = (page - 1) * page_size
     page_items = countries[start:start + page_size]
 
+    # Telegram limits callback_data to 64 bytes; the country name itself can
+    # be longer than that, so the button carries a short key instead.
     buttons = [[InlineKeyboardButton(
         text=f"◇ {c['country']}  ·  {c['count']}",
-        callback_data=f"pick:{c['country']}"
+        callback_data=f"pick:{country_key(c['country'])}"
     )] for c in page_items]
 
     nav = []
