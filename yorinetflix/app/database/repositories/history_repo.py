@@ -4,16 +4,19 @@ YoriNetflix — Generation history repository.
 
 from __future__ import annotations
 
+import logging
+
 import asyncpg
 
+log = logging.getLogger("yorinetflix.history")
 
-async def add(
+
+async def _insert(
     conn: asyncpg.Connection,
     user_id: int,
     country: str,
-    cookie_id: int | None = None,
+    cookie_id: int | None,
 ) -> None:
-    """Record a generation event."""
     await conn.execute(
         """
         INSERT INTO generation_history (user_id, country, cookie_id)
@@ -23,6 +26,36 @@ async def add(
         country,
         cookie_id,
     )
+
+
+async def add(
+    conn: asyncpg.Connection,
+    user_id: int,
+    country: str,
+    cookie_id: int | None = None,
+) -> None:
+    """Record a generation event.
+
+    ``cookie_id`` links the event to the inventory row that was delivered.
+    If that row no longer exists (racing admin wipe, stale data), the event is
+    still recorded with a NULL link instead of failing the delivery — the
+    history write must never break generation.  A SAVEPOINT keeps the caller's
+    transaction usable after such a violation.
+    """
+    if cookie_id is None:
+        await _insert(conn, user_id, country, None)
+        return
+    try:
+        # Nested `transaction()` opens a SAVEPOINT when the caller already has
+        # a transaction open, so a failed insert does not poison it.
+        async with conn.transaction():
+            await _insert(conn, user_id, country, cookie_id)
+    except asyncpg.ForeignKeyViolationError:
+        log.warning(
+            "cookie_id=%s vanished before history insert; recording NULL link",
+            cookie_id,
+        )
+        await _insert(conn, user_id, country, None)
 
 
 async def get_user_history(

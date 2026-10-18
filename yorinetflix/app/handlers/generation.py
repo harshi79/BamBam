@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Dispatcher, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, User
 
 from app.config import Settings
 from app.database.connection import get_pool
@@ -61,82 +61,101 @@ def register(dp: Dispatcher, settings: Settings):
             return await safe_answer(
                 callback, "↻ This menu is out of date. Open Generate again.", True
             )
-        pool = get_pool()
+        try:
+            await _generate_and_deliver(callback, user, token, settings)
+        except Exception:
+            # Never leave the button spinner hanging on an unexpected error,
+            # and never let an audit/telemetry failure take down delivery.
+            log.exception(
+                "Unhandled error while generating for user %s (token=%r)",
+                user.id,
+                token,
+            )
+            return await safe_answer(
+                callback, "× Something went wrong. Please try again.", True
+            )
 
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                # Upsert user
-                await user_repo.upsert(conn, user.id, user.username or "", user.full_name or "")
 
-                # Check ban
-                if await user_repo.is_banned(conn, user.id):
-                    return await safe_answer(callback, "× Access to generation is restricted.", True)
+async def _generate_and_deliver(
+    callback: CallbackQuery, user: User, token: str, settings: Settings
+) -> None:
+    """Run the allocation transaction and deliver the picked account."""
+    pool = get_pool()
 
-                # Check cooldown
-                cd_ok, cd_remaining = await limits.check_cooldown(
-                    conn, user.id, settings.COOLDOWN_SECONDS
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Upsert user
+            await user_repo.upsert(conn, user.id, user.username or "", user.full_name or "")
+
+            # Check ban
+            if await user_repo.is_banned(conn, user.id):
+                return await safe_answer(callback, "× Access to generation is restricted.", True)
+
+            # Check cooldown
+            cd_ok, cd_remaining = await limits.check_cooldown(
+                conn, user.id, settings.COOLDOWN_SECONDS
+            )
+            if not cd_ok:
+                return await safe_answer(
+                    callback, f"↻ Available in {cd_remaining}s. Please wait before generating again.", True
                 )
-                if not cd_ok:
-                    return await safe_answer(
-                        callback, f"↻ Available in {cd_remaining}s. Please wait before generating again.", True
-                    )
 
-                # Check daily limit
-                dl_ok, dl_remaining = await limits.check_daily_limit(
-                    conn, user.id, settings.DAILY_GENERATION_LIMIT
+            # Check daily limit
+            dl_ok, dl_remaining = await limits.check_daily_limit(
+                conn, user.id, settings.DAILY_GENERATION_LIMIT
+            )
+            if not dl_ok:
+                return await safe_answer(
+                    callback, "Your daily limit has been reached. Try again tomorrow.", True
                 )
-                if not dl_ok:
-                    return await safe_answer(
-                        callback, "Your daily limit has been reached. Try again tomorrow.", True
-                    )
 
-                # Resolve the key to a stocked country, then pick atomically
-                country = await inventory.resolve_country(conn, token)
-                if country is None:
-                    return await safe_answer(
-                        callback, "No stock remains for this country.", True
-                    )
-                cookie = await inventory.pick_account(conn, country)
-                if cookie is None:
-                    return await safe_answer(
-                        callback, "No stock remains for this country.", True
-                    )
+            # Resolve the key to a stocked country, then pick atomically
+            country = await inventory.resolve_country(conn, token)
+            if country is None:
+                return await safe_answer(
+                    callback, "No stock remains for this country.", True
+                )
+            cookie = await inventory.pick_account(conn, country)
+            if cookie is None:
+                return await safe_answer(
+                    callback, "No stock remains for this country.", True
+                )
 
-                # Record history and update user
-                await history_repo.add(conn, user.id, country, cookie["id"])
-                await user_repo.set_last_gen_time(conn, user.id)
-                await user_repo.increment_total_generated(conn, user.id)
+            # Record history and update user
+            await history_repo.add(conn, user.id, country, cookie["id"])
+            await user_repo.set_last_gen_time(conn, user.id)
+            await user_repo.increment_total_generated(conn, user.id)
 
-                # Award points if configured
-                if settings.POINTS_PER_GENERATION > 0:
-                    await user_repo.add_points(conn, user.id, settings.POINTS_PER_GENERATION)
+            # Award points if configured
+            if settings.POINTS_PER_GENERATION > 0:
+                await user_repo.add_points(conn, user.id, settings.POINTS_PER_GENERATION)
 
-                # Get remaining stock
-                remaining = await inventory_repo_count(conn, country)
+            # Get remaining stock
+            remaining = await inventory_repo_count(conn, country)
 
-        # Build and send the account message
-        account_text = build_account_message(
-            country=country,
-            raw_text=cookie["raw_text"],
-            netflix_id=cookie["netflix_id"] or "",
-            secure_id=cookie["secure_netflix_id"] or "",
-            remaining=remaining,
-        )
+    # Build and send the account message
+    account_text = build_account_message(
+        country=country,
+        raw_text=cookie["raw_text"],
+        netflix_id=cookie["netflix_id"] or "",
+        secure_id=cookie["secure_netflix_id"] or "",
+        remaining=remaining,
+    )
 
-        # A delivered account is always a fresh message — never an edit of the
-        # country list, and never dependent on that message still existing.
-        delivered = await send_new(
-            callback,
-            account_text,
-            reply_markup=cookie_action_kb(
-                cookie["pc_url"] or "", cookie["tv_url"] or "", cookie["phone_url"] or ""
-            ),
-        )
-        if not delivered:
-            log.error("Failed to deliver account for country %r to user %s", country, user.id)
-            return await safe_answer(callback, "Delivery failed. Please contact an administrator.", True)
+    # A delivered account is always a fresh message — never an edit of the
+    # country list, and never dependent on that message still existing.
+    delivered = await send_new(
+        callback,
+        account_text,
+        reply_markup=cookie_action_kb(
+            cookie["pc_url"] or "", cookie["tv_url"] or "", cookie["phone_url"] or ""
+        ),
+    )
+    if not delivered:
+        log.error("Failed to deliver account for country %r to user %s", country, user.id)
+        return await safe_answer(callback, "Delivery failed. Please contact an administrator.", True)
 
-        await safe_answer(callback, "✓ Delivered. Your account is in the message below.")
+    await safe_answer(callback, "✓ Delivered. Your account is in the message below.")
 
 
 async def inventory_repo_count(conn, country: str) -> int:

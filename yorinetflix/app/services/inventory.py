@@ -128,9 +128,9 @@ async def get_country_stock(conn: asyncpg.Connection) -> list[dict]:
 async def pick_account(
     conn: asyncpg.Connection, country: str
 ) -> Optional[asyncpg.Record]:
-    """Atomically pick a random account for a country.
+    """Atomically pick a random undelivered account for a country.
 
-    Returns the cookie record (already deleted from inventory) or None.
+    Returns the cookie record (already marked consumed) or None.
     The caller must commit the transaction to finalize the allocation.
     """
     return await inventory_repo.pick_random(conn, country)

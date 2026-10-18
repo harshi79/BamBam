@@ -45,6 +45,12 @@ class TestMigrationDiscovery:
         versions = [v for v, _, _ in migrations]
         assert 3 in versions
 
+    def test_discover_finds_consumed_cookies_migration(self):
+        """004_consumed_cookies.sql should always be found."""
+        migrations = discover_migrations()
+        versions = [v for v, _, _ in migrations]
+        assert 4 in versions
+
     def test_migrations_sorted_by_version(self):
         """Migrations must be in ascending version order."""
         migrations = discover_migrations()
@@ -58,6 +64,7 @@ class TestMigrationDiscovery:
         assert names[1] == "initial"
         assert names[2] == "rewards"
         assert names[3] == "config"
+        assert names[4] == "consumed_cookies"
 
     def test_all_migration_files_exist(self):
         """Every discovered migration should point to an existing file."""
