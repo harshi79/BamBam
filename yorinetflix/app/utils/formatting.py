@@ -13,15 +13,9 @@ from urllib.parse import urlsplit
 from app.utils.text import esc, sc, sc_html
 
 # Sign-in destinations.  These are the plain, public Netflix pages: they carry
-# no credentials, so whoever opens them signs in as themselves.
-#
-# DEFAULT_TV_URL is the official TV activation page — the one the Netflix app
-# shows on a television ("go to netflix.com/tv8 and enter the code displayed on
-# your TV").  It must stay tokenless: the TV flow is *code entry*, not
-# auto-login.  There is no authorized, documented Netflix API through which
-# this bot could mint a per-account auto-login token for somebody else's
-# account, so no token is ever generated, stored, or embedded here.
-DEFAULT_TV_URL = "https://www.netflix.com/tv8"
+# no credentials, so whoever opens them signs in as themselves.  There is no TV
+# destination — TV sign-in is an activation-code flow driven by the television,
+# and no auto-login token is ever generated, stored, or embedded here.
 DEFAULT_PC_URL = "https://www.netflix.com/account"
 DEFAULT_MOBILE_URL = "https://www.netflix.com/login"
 

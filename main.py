@@ -56,15 +56,9 @@ START_VIDEO_URL = os.getenv(
 ).strip()
 
 # Sign-in destinations.  Plain, public Netflix pages carrying no credentials:
-# whoever opens them signs in as themselves.
-#
-# DEFAULT_TV_URL is the official TV activation page — the one the Netflix app
-# shows on a television ("go to netflix.com/tv8 and enter the code displayed on
-# your TV").  It must stay tokenless: the TV flow is *code entry*, not
-# auto-login.  There is no authorized, documented Netflix API through which
-# this bot could mint a per-account auto-login token for somebody else's
-# account, so no token is ever generated, stored, or embedded here.
-DEFAULT_TV_URL = "https://www.netflix.com/tv8"
+# whoever opens them signs in as themselves.  There is no TV destination — TV
+# sign-in is an activation-code flow driven by the television, and no
+# auto-login token is ever generated, stored, or embedded here.
 DEFAULT_PC_URL = "https://www.netflix.com/account"
 DEFAULT_MOBILE_URL = "https://www.netflix.com/login"
 
@@ -535,10 +529,17 @@ def normalize_url(url: str, fallback: str) -> str:
 
 
 def cookie_action_kb(pc_url: str, tv_url: str, mobile_url: str) -> InlineKeyboardMarkup:
+    """PC and Mobile sign-in routes.
+
+    There is deliberately no TV route: TV sign-in is an activation-code flow
+    driven by the television itself, so a button here could only ever be a
+    pre-authenticated link.  ``tv_url`` is still accepted (callers pass the
+    stored inventory value) but is not rendered.
+    """
+    del tv_url  # accepted for call-site compatibility; no TV button is built
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="↗ Pᴄ", url=normalize_url(pc_url, DEFAULT_PC_URL)),
-            InlineKeyboardButton(text="↗ Tᴠ", url=normalize_url(tv_url, DEFAULT_TV_URL)),
             InlineKeyboardButton(text="↗ Mᴏʙɪʟᴇ", url=normalize_url(mobile_url, DEFAULT_MOBILE_URL)),
         ],
     ])

@@ -48,25 +48,29 @@ def standalone(tmp_path_factory):
                 os.environ[key] = value
 
 
-def test_tv_default_is_the_official_activation_page(standalone):
-    assert standalone.DEFAULT_TV_URL == "https://www.netflix.com/tv8"
+def test_only_pc_and_mobile_defaults_exist(standalone):
+    assert standalone.DEFAULT_PC_URL == "https://www.netflix.com/account"
+    assert standalone.DEFAULT_MOBILE_URL == "https://www.netflix.com/login"
+    assert not hasattr(standalone, "DEFAULT_TV_URL")
 
 
 def test_defaults_carry_no_credentials(standalone):
-    for url in (
-        standalone.DEFAULT_TV_URL,
-        standalone.DEFAULT_PC_URL,
-        standalone.DEFAULT_MOBILE_URL,
-    ):
+    for url in (standalone.DEFAULT_PC_URL, standalone.DEFAULT_MOBILE_URL):
         assert "?" not in url
         assert "nftoken" not in url
         assert standalone.strip_credential_params(url) == url
 
 
-def test_tv_button_falls_back_to_official_activation_page(standalone):
-    tv = standalone.cookie_action_kb("", "", "").inline_keyboard[0][1]
-    assert tv.text == "↗ Tᴠ"
-    assert tv.url == standalone.DEFAULT_TV_URL
+def test_no_tv_route_is_offered(standalone):
+    """The stored TV URL is accepted but never turned into a button."""
+    kb = standalone.cookie_action_kb(
+        "https://pc.example", "https://www.netflix.com/tv8", "https://m.example"
+    )
+    row = kb.inline_keyboard[0]
+    assert [b.text for b in row] == ["↗ Pᴄ", "↗ Mᴏʙɪʟᴇ"]
+    # PC/Mobile keep their own plain URLs; the TV one is dropped entirely.
+    assert [b.url for b in row] == ["https://pc.example", "https://m.example"]
+    assert not any("tv8" in url or "tv2" in url for url in (b.url or "" for b in row))
 
 
 def test_auto_login_token_never_reaches_a_button(standalone):
@@ -81,9 +85,9 @@ def test_auto_login_token_never_reaches_a_button(standalone):
 
 
 def test_plain_inventory_url_is_preserved(standalone):
-    tv = standalone.cookie_action_kb(
+    pc = standalone.cookie_action_kb(
         "https://www.netflix.com/account",
-        "https://www.netflix.com/tv2",
+        "https://www.netflix.com/tv8",
         "https://www.netflix.com/login",
-    ).inline_keyboard[0][1]
-    assert tv.url == "https://www.netflix.com/tv2"
+    ).inline_keyboard[0][0]
+    assert pc.url == standalone.DEFAULT_PC_URL
