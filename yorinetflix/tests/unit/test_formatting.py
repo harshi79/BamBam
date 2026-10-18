@@ -5,9 +5,15 @@ YoriNetflix — Formatting utility tests.
 from datetime import datetime, timezone
 
 from app.utils.formatting import (
-    build_welcome_text, build_profile_text, build_account_message,
-    build_cookie_string, normalize_url, clean_info_block,
-    build_daily_reward_text, build_daily_already_claimed,
+    build_account_message,
+    build_cookie_string,
+    build_daily_already_claimed,
+    build_daily_reward_text,
+    build_history_page,
+    build_profile_text,
+    build_welcome_text,
+    clean_info_block,
+    normalize_url,
 )
 
 
@@ -20,6 +26,11 @@ class TestWelcomeText:
     def test_contains_welcome(self):
         text = build_welcome_text()
         assert "welcome" in text or "ᴡᴇʟᴄᴏᴍᴇ" in text
+
+    def test_uses_small_caps_branding_and_clean_symbols(self):
+        text = build_welcome_text()
+        assert "✦ ʏᴏʀɪɴᴇᴛꜰʟɪx" in text
+        assert "🍿" not in text and "🎬" not in text
 
 
 class TestProfileText:
@@ -130,3 +141,14 @@ class TestDailyRewardText:
     def test_already_claimed_text(self):
         text = build_daily_already_claimed(12)
         assert "12" in text
+
+
+class TestHistoryFormatting:
+    def test_second_page_keeps_absolute_entry_numbers(self):
+        text = build_history_page(
+            [{"country": "Japan", "when": "2024-01-01 12:00 UTC"}],
+            page=2,
+            total_pages=2,
+            total=11,
+        )
+        assert "<code>11</code>" in text

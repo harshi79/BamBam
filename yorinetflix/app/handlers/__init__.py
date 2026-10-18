@@ -12,7 +12,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import CallbackQuery
 
 from app.config import Settings
-from app.handlers import start, generation, profile, history, leaderboard, rewards, admin
+from app.handlers import admin, generation, history, leaderboard, profile, rewards, start
 from app.utils.messaging import safe_answer
 
 log = logging.getLogger("yorinetflix.handlers")
@@ -51,4 +51,4 @@ def _register_fallbacks(dp: Dispatcher) -> None:
     async def cb_unhandled(callback: CallbackQuery):
         user_id = callback.from_user.id if callback.from_user else None
         log.info("Unhandled callback data %r from user %s", callback.data, user_id)
-        await safe_answer(callback, "🔄 menu refreshed — send /start")
+        await safe_answer(callback, "This menu may be outdated. Send /start to refresh it.")

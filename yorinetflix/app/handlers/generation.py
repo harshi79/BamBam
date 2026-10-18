@@ -9,18 +9,19 @@ from __future__ import annotations
 import logging
 
 from aiogram import Dispatcher, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 
 from app.config import Settings
 from app.database.connection import get_pool
-from app.database.repositories import user_repo, history_repo
+from app.database.repositories import history_repo, user_repo
+from app.keyboards.inline import back_to_menu_kb, cookie_action_kb, country_list_kb
 from app.services import inventory, limits
-from app.keyboards.inline import country_list_kb, cookie_action_kb, back_to_menu_kb
-from app.utils.text import sc, sc_html, esc
-from app.utils.messaging import ack, parse_page, safe_answer, safe_edit, send_new
 from app.utils.formatting import (
-    build_account_message, build_country_list_text, build_country_empty,
+    build_account_message,
+    build_country_empty,
+    build_country_list_text,
 )
+from app.utils.messaging import ack, parse_page, safe_answer, safe_edit, send_new
 
 log = logging.getLogger("yorinetflix.handlers.gen")
 
@@ -55,7 +56,7 @@ def register(dp: Dispatcher, settings: Settings):
         country = callback.data.split(":", 1)[1].strip()
         if not country:
             return await safe_answer(
-                callback, "🔄 this menu is out of date — press Generate again.", True
+                callback, "↻ This menu is out of date. Open Generate again.", True
             )
         pool = get_pool()
 
@@ -66,7 +67,7 @@ def register(dp: Dispatcher, settings: Settings):
 
                 # Check ban
                 if await user_repo.is_banned(conn, user.id):
-                    return await safe_answer(callback, "🚫 you are banned.", True)
+                    return await safe_answer(callback, "× Access to generation is restricted.", True)
 
                 # Check cooldown
                 cd_ok, cd_remaining = await limits.check_cooldown(
@@ -74,7 +75,7 @@ def register(dp: Dispatcher, settings: Settings):
                 )
                 if not cd_ok:
                     return await safe_answer(
-                        callback, f"⏳ wait {cd_remaining}s before generating again.", True
+                        callback, f"↻ Available in {cd_remaining}s. Please wait before generating again.", True
                     )
 
                 # Check daily limit
@@ -83,14 +84,14 @@ def register(dp: Dispatcher, settings: Settings):
                 )
                 if not dl_ok:
                     return await safe_answer(
-                        callback, "📊 daily limit reached — try again tomorrow.", True
+                        callback, "Your daily limit has been reached. Try again tomorrow.", True
                     )
 
                 # Pick an account atomically
                 cookie = await inventory.pick_account(conn, country)
                 if cookie is None:
                     return await safe_answer(
-                        callback, "❌ out of stock for this country!", True
+                        callback, "No stock remains for this country.", True
                     )
 
                 # Record history and update user
@@ -125,9 +126,9 @@ def register(dp: Dispatcher, settings: Settings):
         )
         if not delivered:
             log.error("Failed to deliver account for country %r to user %s", country, user.id)
-            return await safe_answer(callback, "⚠️ delivery error — contact admin.", True)
+            return await safe_answer(callback, "Delivery failed. Please contact an administrator.", True)
 
-        await safe_answer(callback, "✅ delivered — check below!")
+        await safe_answer(callback, "✓ Delivered. Your account is in the message below.")
 
 
 async def inventory_repo_count(conn, country: str) -> int:
