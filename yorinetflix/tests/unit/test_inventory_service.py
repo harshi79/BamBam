@@ -43,9 +43,6 @@ class TestParseCookieText:
         assert data["phone_url"] == "https://www.netflix.com/login"
 
     def test_tv_url(self):
-        # The parser keeps inventory text verbatim and the value is still
-        # stored, but no TV button is built from it — TV sign-in is a
-        # code-entry flow driven by the television itself.
         data = parse_cookie_text(SAMPLE_COOKIE)
         assert data["tv_url"] == "https://www.netflix.com/tv2"
 

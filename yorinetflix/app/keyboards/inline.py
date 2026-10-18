@@ -11,7 +11,7 @@ from math import ceil
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.services.inventory import country_key
-from app.utils.formatting import DEFAULT_MOBILE_URL, DEFAULT_PC_URL, normalize_url
+from app.utils.formatting import DEFAULT_MOBILE_URL, DEFAULT_PC_URL, DEFAULT_TV_URL, normalize_url
 
 
 def main_menu_kb() -> InlineKeyboardMarkup:
@@ -73,17 +73,10 @@ def country_list_kb(
 
 
 def cookie_action_kb(pc_url: str, tv_url: str, mobile_url: str) -> InlineKeyboardMarkup:
-    """PC and Mobile sign-in routes.
-
-    There is deliberately no TV route: TV sign-in is an activation-code flow
-    driven by the television itself, so a button here could only ever be a
-    pre-authenticated link.  ``tv_url`` is still accepted (callers pass the
-    stored inventory value) but is not rendered.
-    """
-    del tv_url  # accepted for call-site compatibility; no TV button is built
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="↗ Pᴄ", url=normalize_url(pc_url, DEFAULT_PC_URL)),
+            InlineKeyboardButton(text="↗ Tᴠ", url=normalize_url(tv_url, DEFAULT_TV_URL)),
             InlineKeyboardButton(text="↗ Mᴏʙɪʟᴇ", url=normalize_url(mobile_url, DEFAULT_MOBILE_URL)),
         ],
     ])
