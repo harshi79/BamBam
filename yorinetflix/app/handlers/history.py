@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from math import ceil
 
 from aiogram import Dispatcher, F
+from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 
 from app.database.connection import get_pool
