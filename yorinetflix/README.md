@@ -21,6 +21,12 @@ A production-ready Telegram bot for distributing authorized digital inventory wi
 - **Driver:** asyncpg
 - **Config:** Pydantic Settings
 
+## Deploying on Render
+
+The root Docker image runs the bot and a small HTTP health-check listener together. When creating a Render **Web Service**, use the repository root as the Docker build context and keep the default Dockerfile/entrypoint. The app binds to `0.0.0.0:$PORT` (defaulting to `10000` locally); `/healthz` and `/` return `200 OK` for platform health checks. Set `BOT_TOKEN`, `ADMIN_IDS`, and `DATABASE_URL` in the service environment as usual.
+
+Do not replace the Docker command with only `python -m app.main` from a different working directory; the root entrypoint selects this production app when the required environment variables are present.
+
 ## Quick Start
 
 ### 1. Prerequisites

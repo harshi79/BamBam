@@ -29,10 +29,23 @@ async def check_membership(
     if not channel:
         return True, ""
 
+    # Telegram requires the numeric chat ID for private channels. Environment
+    # variables arrive as strings, so convert numeric IDs (for example,
+    # -1001234567890) while leaving public @usernames untouched.
+    chat: str | int = channel
     try:
-        member = await bot.get_chat_member(channel, user_id)
-        is_member = member.status not in ("left", "kicked")
-        return is_member, ""
+        chat = int(channel)
+    except ValueError:
+        pass
+
+    try:
+        member = await bot.get_chat_member(chat, user_id)
+        status = getattr(member.status, "value", member.status)
+        if status in ("creator", "administrator", "member"):
+            return True, ""
+        if status == "restricted" and bool(getattr(member, "is_member", False)):
+            return True, ""
+        return False, ""
     except TelegramBadRequest as e:
         err = str(e).lower()
         if "chat not found" in err or "channel_private" in err:
