@@ -17,6 +17,7 @@ from app.database.repositories import user_repo, history_repo
 from app.services import inventory, limits
 from app.keyboards.inline import country_list_kb, cookie_action_kb, back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
+from app.utils.messaging import ack, parse_page, safe_answer, safe_edit, send_new
 from app.utils.formatting import (
     build_account_message, build_country_list_text, build_country_empty,
 )
@@ -28,40 +29,34 @@ def register(dp: Dispatcher, settings: Settings):
 
     @dp.callback_query(F.data.startswith("gen:"))
     async def cb_gen(callback: CallbackQuery):
-        page = int(callback.data.split(":", 1)[1])
+        # Clear the button spinner before the database round-trip, and tolerate
+        # a malformed/stale page number instead of raising ValueError.
+        await ack(callback)
+        page = parse_page(callback.data)
         pool = get_pool()
         async with pool.acquire() as conn:
             countries = await inventory.get_country_stock(conn)
 
         if not countries:
-            try:
-                await callback.message.edit_text(
-                    build_country_empty(),
-                    reply_markup=back_to_menu_kb(),
-                    disable_web_page_preview=True,
-                )
-            except Exception:
-                pass
-            return await callback.answer()
+            await safe_edit(callback, build_country_empty(), back_to_menu_kb())
+            return
 
         total = sum(c["count"] for c in countries)
         kb = country_list_kb(countries, page, settings.PAGE_SIZE)
         text = build_country_list_text(total, len(countries))
-        try:
-            await callback.message.edit_text(
-                text, reply_markup=kb, disable_web_page_preview=True
-            )
-        except Exception:
-            pass
-        await callback.answer()
+        await safe_edit(callback, text, kb)
 
     @dp.callback_query(F.data.startswith("pick:"))
     async def cb_pick_country(callback: CallbackQuery):
         user = callback.from_user
         if not user:
-            return await callback.answer()
+            return await safe_answer(callback)
 
-        country = callback.data.split(":", 1)[1]
+        country = callback.data.split(":", 1)[1].strip()
+        if not country:
+            return await safe_answer(
+                callback, "🔄 this menu is out of date — press Generate again.", True
+            )
         pool = get_pool()
 
         async with pool.acquire() as conn:
@@ -71,16 +66,15 @@ def register(dp: Dispatcher, settings: Settings):
 
                 # Check ban
                 if await user_repo.is_banned(conn, user.id):
-                    return await callback.answer("🚫 you are banned.", show_alert=True)
+                    return await safe_answer(callback, "🚫 you are banned.", True)
 
                 # Check cooldown
                 cd_ok, cd_remaining = await limits.check_cooldown(
                     conn, user.id, settings.COOLDOWN_SECONDS
                 )
                 if not cd_ok:
-                    return await callback.answer(
-                        f"⏳ wait {cd_remaining}s before generating again.",
-                        show_alert=True,
+                    return await safe_answer(
+                        callback, f"⏳ wait {cd_remaining}s before generating again.", True
                     )
 
                 # Check daily limit
@@ -88,16 +82,15 @@ def register(dp: Dispatcher, settings: Settings):
                     conn, user.id, settings.DAILY_GENERATION_LIMIT
                 )
                 if not dl_ok:
-                    return await callback.answer(
-                        "📊 daily limit reached — try again tomorrow.",
-                        show_alert=True,
+                    return await safe_answer(
+                        callback, "📊 daily limit reached — try again tomorrow.", True
                     )
 
                 # Pick an account atomically
                 cookie = await inventory.pick_account(conn, country)
                 if cookie is None:
-                    return await callback.answer(
-                        "❌ out of stock for this country!", show_alert=True
+                    return await safe_answer(
+                        callback, "❌ out of stock for this country!", True
                     )
 
                 # Record history and update user
@@ -121,19 +114,20 @@ def register(dp: Dispatcher, settings: Settings):
             remaining=remaining,
         )
 
-        try:
-            await callback.message.answer(
-                account_text,
-                reply_markup=cookie_action_kb(
-                    cookie["pc_url"] or "", cookie["tv_url"] or "", cookie["phone_url"] or ""
-                ),
-                disable_web_page_preview=True,
-            )
-        except Exception as e:
-            log.exception("Failed to deliver account: %s", e)
-            return await callback.answer("⚠️ delivery error — contact admin.", show_alert=True)
+        # A delivered account is always a fresh message — never an edit of the
+        # country list, and never dependent on that message still existing.
+        delivered = await send_new(
+            callback,
+            account_text,
+            reply_markup=cookie_action_kb(
+                cookie["pc_url"] or "", cookie["tv_url"] or "", cookie["phone_url"] or ""
+            ),
+        )
+        if not delivered:
+            log.error("Failed to deliver account for country %r to user %s", country, user.id)
+            return await safe_answer(callback, "⚠️ delivery error — contact admin.", True)
 
-        await callback.answer("✅ delivered — check below!")
+        await safe_answer(callback, "✅ delivered — check below!")
 
 
 async def inventory_repo_count(conn, country: str) -> int:

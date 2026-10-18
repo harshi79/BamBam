@@ -109,7 +109,8 @@ async def run_bot(settings: Settings) -> None:
         ])
 
         await bot.delete_webhook(drop_pending_updates=True)
-        me = await bot.get_me()
+        # Warms aiogram's cached identity so handlers never pay for a getMe call.
+        me = await bot.me()
         log.info("Bot online: @%s (id=%s)", me.username, me.id)
         log.info("Starting polling…")
 

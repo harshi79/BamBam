@@ -14,6 +14,7 @@ from app.database.repositories import user_repo
 from app.services.users import get_profile_data
 from app.services.limits import check_daily_limit
 from app.keyboards.inline import main_menu_kb
+from app.utils.messaging import ack, safe_edit
 from app.utils.formatting import build_profile_text
 
 
@@ -50,11 +51,10 @@ def register(dp: Dispatcher, settings: Settings):
 
     @dp.callback_query(F.data == "profile")
     async def cb_profile(callback: CallbackQuery):
+        if not callback.from_user:
+            return await ack(callback)
+
+        # Clear the button spinner before the database round-trip.
+        await ack(callback)
         text = await _build_profile(callback.from_user)
-        try:
-            await callback.message.edit_text(
-                text, reply_markup=main_menu_kb(), disable_web_page_preview=True
-            )
-        except Exception:
-            pass
-        await callback.answer()
+        await safe_edit(callback, text, main_menu_kb())

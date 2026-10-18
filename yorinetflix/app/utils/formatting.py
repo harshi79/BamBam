@@ -132,7 +132,7 @@ def build_referral_text(
 ) -> str:
     return (
         f"🔗 <b>Referral</b>\n\n"
-        f"<code>{link}</code>\n\n"
+        f"<code>{esc(link)}</code>\n\n"
         f"👥 referrals  <b>{referral_count}</b>\n"
         f"💰 points  <b>{balance}</b>\n\n"
         f"<blockquote>share your link — earn <b>{reward_points} pts</b> "

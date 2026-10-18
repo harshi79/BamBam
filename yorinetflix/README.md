@@ -112,9 +112,11 @@ yorinetflix/
 │   │   └── throttle.py                # Rate limiting middleware
 │   └── utils/
 │       ├── text.py                    # Small-caps, HTML escaping
+│       ├── messaging.py              # Safe button replies: ack, edit + fallbacks
 │       └── formatting.py             # Message builders
 ├── tests/
 │   ├── unit/                          # Pure function tests (no DB)
+│   ├── test_handlers/                 # Button/callback flows (no DB, mocked bot)
 │   ├── integration/                   # Tests requiring PostgreSQL
 │   └── conftest.py                    # Shared fixtures
 ├── requirements.txt
@@ -150,6 +152,23 @@ yorinetflix/
 | `/givepoints <id> <amount>` | Adjust user points |
 | `/ban <id>` / `/unban <id>` | Ban/unban users |
 | `/admin` | Admin help |
+
+## Inline Buttons
+
+Button handling is centralised in `app/utils/messaging.py` so a press is never
+silently dropped and never leaves the button spinning:
+
+| Helper | Behaviour |
+|---|---|
+| `safe_answer` | Acknowledges the press (stops the spinner); ignores stale or duplicate answers. |
+| `safe_edit` | Edits in place; treats "message is not modified" as success, edits the **caption** on media messages (the video welcome screen), and sends a fresh message when the original was deleted or is inaccessible. |
+| `send_new` | Always delivers as a new message (used for account delivery). |
+| `ack` | Acknowledges *before* slow database work so navigation feels instant. |
+| `parse_page` | Tolerates malformed or stale pagination data instead of raising. |
+
+`register_all()` finishes with a catch-all callback handler: unmatched callback
+data (stale keyboards left in old chats) is acknowledged as well, because
+Telegram never answers it on its own and the button would spin for a minute.
 
 ## Environment Variables
 

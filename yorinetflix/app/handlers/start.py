@@ -17,6 +17,7 @@ from app.services import subscriptions
 from app.services.referrals import process_referral
 from app.keyboards.inline import main_menu_kb, join_kb
 from app.utils.text import sc, sc_html, esc
+from app.utils.messaging import safe_answer, safe_edit
 from app.utils.formatting import build_welcome_text, build_fsub_prompt
 
 log = logging.getLogger("yorinetflix.handlers.start")
@@ -85,8 +86,8 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
 
     @dp.callback_query(F.data == "check_join")
     async def cb_check_join(callback: CallbackQuery):
-        if not settings.FORCE_CHANNEL:
-            return await callback.answer()
+        if not callback.from_user or not settings.FORCE_CHANNEL:
+            return await safe_answer(callback)
 
         is_member, err = await subscriptions.check_membership(
             bot, settings.FORCE_CHANNEL, callback.from_user.id,
@@ -94,35 +95,20 @@ def register(dp: Dispatcher, bot: Bot, settings: Settings):
         )
         if not is_member:
             if err in ("channel_not_found", "bot_not_admin"):
-                await callback.answer(
-                    "⚠️ verification unavailable — try again later.", show_alert=True
+                return await safe_answer(
+                    callback, "⚠️ verification unavailable — try again later.", True
                 )
-            else:
-                await callback.answer("❌ you haven't joined yet.", show_alert=True)
-            return
+            return await safe_answer(callback, "❌ you haven't joined yet.", True)
 
-        text = build_welcome_text()
-        kb = main_menu_kb()
-        try:
-            await callback.message.edit_text(
-                text, reply_markup=kb, disable_web_page_preview=True
-            )
-        except Exception:
-            pass
-        await callback.answer("✅ verified!")
+        # Feedback first so the button stops spinning, then swap the screen.
+        await safe_answer(callback, "✅ verified!")
+        await safe_edit(callback, build_welcome_text(), main_menu_kb(), bot=bot)
 
     @dp.callback_query(F.data == "menu")
     async def cb_menu(callback: CallbackQuery):
-        text = build_welcome_text()
-        kb = main_menu_kb()
-        try:
-            await callback.message.edit_text(
-                text, reply_markup=kb, disable_web_page_preview=True
-            )
-        except Exception:
-            pass
-        await callback.answer()
+        await safe_answer(callback)
+        await safe_edit(callback, build_welcome_text(), main_menu_kb(), bot=bot)
 
     @dp.callback_query(F.data == "noop")
     async def cb_noop(callback: CallbackQuery):
-        await callback.answer()
+        await safe_answer(callback)

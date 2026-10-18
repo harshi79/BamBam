@@ -1163,7 +1163,7 @@ async def set_commands():
 
 
 async def on_startup():
-    me = await bot.get_me()
+    me = await bot.me()  # cached identity — also warms the cache for handlers
     log.info("Bot online: @%s (id=%s)", me.username, me.id)
 
 

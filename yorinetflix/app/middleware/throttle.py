@@ -12,8 +12,9 @@ from collections import OrderedDict
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import TelegramObject, Message, CallbackQuery
+
+from app.utils.messaging import safe_answer
 
 
 class ThrottleMiddleware(BaseMiddleware):
@@ -43,10 +44,9 @@ class ThrottleMiddleware(BaseMiddleware):
             if isinstance(event, Message):
                 return None
             if isinstance(event, CallbackQuery):
-                try:
-                    await event.answer("⏳ slow down.", show_alert=False)
-                except TelegramBadRequest:
-                    pass
+                # Still acknowledge the press, otherwise the dropped button
+                # keeps spinning and looks broken to the user.
+                await safe_answer(event, "⏳ slow down.")
                 return None
 
         self.last[user.id] = now

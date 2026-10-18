@@ -15,6 +15,7 @@ from app.database.connection import get_pool
 from app.database.repositories import history_repo
 from app.keyboards.inline import history_nav_kb, back_to_menu_kb
 from app.utils.text import sc, sc_html, esc
+from app.utils.messaging import ack, parse_page, safe_edit
 from app.utils.formatting import build_history_empty, build_history_page
 
 
@@ -32,7 +33,14 @@ def register(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("history:"))
     async def cb_history(callback: CallbackQuery):
-        page = int(callback.data.split(":", 1)[1])
+        if not callback.from_user:
+            return await ack(callback)
+
+        # Clear the button spinner before the database round-trip, and tolerate
+        # malformed page numbers instead of raising (which would leave the
+        # button spinning forever).
+        await ack(callback)
+        page = parse_page(callback.data)
         offset = (page - 1) * 10
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -40,13 +48,7 @@ def register(dp: Dispatcher):
                 conn, callback.from_user.id, 10, offset
             )
         text, kb = _format_history(rows, total, page)
-        try:
-            await callback.message.edit_text(
-                text, reply_markup=kb, disable_web_page_preview=True
-            )
-        except Exception:
-            pass
-        await callback.answer()
+        await safe_edit(callback, text, kb)
 
 
 def _format_history(rows, total: int, page: int):
