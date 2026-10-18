@@ -5,6 +5,9 @@ YoriNetflix — Formatting utility tests.
 from datetime import datetime, timezone
 
 from app.utils.formatting import (
+    DEFAULT_MOBILE_URL,
+    DEFAULT_PC_URL,
+    DEFAULT_TV_URL,
     build_account_message,
     build_cookie_string,
     build_daily_already_claimed,
@@ -14,6 +17,7 @@ from app.utils.formatting import (
     build_welcome_text,
     clean_info_block,
     normalize_url,
+    strip_credential_params,
 )
 
 
@@ -107,6 +111,64 @@ class TestNormalizeUrl:
     def test_no_scheme_adds_https(self):
         result = normalize_url("example.com/path", "fallback")
         assert result == "https://example.com/path"
+
+    def test_auto_login_token_is_stripped(self):
+        """A URL that signs its opener into someone else's account must never
+        reach a button — buttons are shared, cached and logged by Telegram."""
+        result = normalize_url(
+            "https://www.netflix.com/tv8?nftoken=NFSECRET123&locale=en-US",
+            DEFAULT_TV_URL,
+        )
+        assert result == "https://www.netflix.com/tv8?locale=en-US"
+
+    def test_credential_param_name_is_case_insensitive(self):
+        assert (
+            normalize_url("https://www.netflix.com/tv8?NFToken=abc", DEFAULT_TV_URL)
+            == "https://www.netflix.com/tv8"
+        )
+
+    def test_token_only_url_falls_back_to_official_page(self):
+        """Stripping must not leave a bare domain root behind."""
+        assert (
+            normalize_url("https://www.netflix.com/?nftoken=NFSECRET", DEFAULT_TV_URL)
+            == DEFAULT_TV_URL
+        )
+
+    def test_fragment_attached_to_a_token_is_dropped_too(self):
+        assert (
+            normalize_url("https://www.netflix.com/tv8?nftoken=abc#state", DEFAULT_TV_URL)
+            == "https://www.netflix.com/tv8"
+        )
+
+    def test_harmless_fragment_is_kept(self):
+        assert (
+            normalize_url("https://www.netflix.com/tv8?locale=en#top", DEFAULT_TV_URL)
+            == "https://www.netflix.com/tv8?locale=en#top"
+        )
+
+
+class TestSignInDefaults:
+    """The default routes are plain public pages — never credential carriers."""
+
+    def test_tv_default_is_the_official_activation_page(self):
+        # The page the Netflix app itself points at on a television:
+        # "go to netflix.com/tv8 and enter the code displayed on your TV".
+        assert DEFAULT_TV_URL == "https://www.netflix.com/tv8"
+
+    def test_defaults_carry_no_credentials(self):
+        for url in (DEFAULT_TV_URL, DEFAULT_PC_URL, DEFAULT_MOBILE_URL):
+            assert "?" not in url
+            assert "nftoken" not in url
+            assert strip_credential_params(url) == url
+
+    def test_strip_keeps_harmless_params_and_path(self):
+        url = "https://www.netflix.com/tv8?serverState=abc&locale=en-GB"
+        assert strip_credential_params(url) == url
+
+    def test_strip_without_query_string_is_a_no_op(self):
+        assert strip_credential_params("https://www.netflix.com/tv8") == (
+            "https://www.netflix.com/tv8"
+        )
 
 
 class TestCleanInfoBlock:

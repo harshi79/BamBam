@@ -11,6 +11,7 @@ from app.keyboards.inline import (
     main_menu_kb,
 )
 from app.services.inventory import country_key
+from app.utils.formatting import DEFAULT_MOBILE_URL, DEFAULT_PC_URL, DEFAULT_TV_URL
 
 # Telegram rejects the whole keyboard (BUTTON_DATA_INVALID) if any single
 # button's callback_data is longer than this many bytes.
@@ -146,6 +147,41 @@ class TestCookieActionKb:
         kb = cookie_action_kb("", "", "")
         urls = [b.url for b in kb.inline_keyboard[0]]
         assert all("netflix.com" in u for u in urls)
+
+    def test_tv_button_falls_back_to_official_activation_page(self):
+        """Regression: the TV route used to fall back to a legacy variant
+        instead of the activation page the Netflix app points at."""
+        tv = cookie_action_kb("", "", "").inline_keyboard[0][1]
+        assert tv.text == "↗ Tᴠ"
+        assert tv.url == DEFAULT_TV_URL == "https://www.netflix.com/tv8"
+
+    def test_inventory_url_is_preserved_when_it_is_a_plain_page(self):
+        tv = cookie_action_kb(
+            "https://www.netflix.com/account",
+            "https://www.netflix.com/tv2",
+            "https://www.netflix.com/login",
+        ).inline_keyboard[0][1]
+        assert tv.url == "https://www.netflix.com/tv2"
+
+    def test_auto_login_token_never_reaches_a_button(self):
+        """Inventory text can carry an ``nftoken`` auto-login link; it must be
+        stripped rather than handed to the recipient as a clickable session."""
+        kb = cookie_action_kb(
+            "https://www.netflix.com/account?nftoken=NFSECRET",
+            "https://www.netflix.com/tv8?nftoken=NFSECRET",
+            "https://www.netflix.com/login?nftoken=NFSECRET",
+        )
+        for button in kb.inline_keyboard[0]:
+            assert "nftoken" not in button.url
+            assert "NFSECRET" not in button.url
+        assert [b.url for b in kb.inline_keyboard[0]] == [
+            DEFAULT_PC_URL, DEFAULT_TV_URL, DEFAULT_MOBILE_URL
+        ]
+
+    def test_button_labels_and_layout_unchanged(self):
+        kb = cookie_action_kb("", "", "")
+        assert [b.text for b in kb.inline_keyboard[0]] == ["↗ Pᴄ", "↗ Tᴠ", "↗ Mᴏʙɪʟᴇ"]
+        assert len(kb.inline_keyboard) == 1
 
 
 class TestHistoryNavKb:

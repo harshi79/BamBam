@@ -43,6 +43,9 @@ class TestParseCookieText:
         assert data["phone_url"] == "https://www.netflix.com/login"
 
     def test_tv_url(self):
+        # The parser keeps inventory text verbatim — sanitising the URL (and
+        # stripping any auto-login token it may carry) is the keyboard layer's
+        # job; see TestCookieActionKb in tests/unit/test_keyboards.py.
         data = parse_cookie_text(SAMPLE_COOKIE)
         assert data["tv_url"] == "https://www.netflix.com/tv2"
 
