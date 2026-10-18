@@ -601,6 +601,41 @@ async def cb_menu(callback: CallbackQuery):
 # ─────────────────────────────────────────────────────────────
 # GENERATE FLOW
 # ─────────────────────────────────────────────────────────────
+# Telegram caps InlineKeyboardButton.callback_data at 64 *bytes*.  A country
+# button used to carry the raw country name ("pick:United States"), so any
+# country whose name did not fit — long names, flag emojis, non-Latin scripts
+# (every such character is 2–4 bytes) — made Telegram reject the whole
+# keyboard with BUTTON_DATA_INVALID.  Buttons now carry a short fixed-size key
+# that is resolved back to the exact country name when pressed.
+COUNTRY_KEY_LEN = 16  # hex chars → "pick:" + 16 = 21 bytes, always within 64
+
+
+def country_key(country: str) -> str:
+    """Short, stable, Telegram-safe identifier for a country name."""
+    return hashlib.sha256(country.encode("utf-8")).hexdigest()[:COUNTRY_KEY_LEN]
+
+
+async def resolve_country(db, token: str) -> str | None:
+    """Map a ``pick:`` payload back to the stocked country it refers to.
+
+    Accepts the country key used by current keyboards, and — so that country
+    lists sent by earlier builds keep working — the raw country name used by
+    older keyboards.  Returns None when no such country is in stock.
+    """
+    async with db.execute(
+        "SELECT DISTINCT country FROM cookies "
+        "WHERE country IS NOT NULL AND country != 'Unknown'"
+    ) as cur:
+        countries = [row[0] for row in await cur.fetchall()]
+
+    for country in countries:
+        if country_key(country) == token:
+            return country
+    if token in countries:  # legacy keyboard: raw country name
+        return token
+    return None
+
+
 async def render_countries(page: int) -> tuple[str, InlineKeyboardMarkup]:
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute(
@@ -628,7 +663,7 @@ async def render_countries(page: int) -> tuple[str, InlineKeyboardMarkup]:
 
     buttons = [[InlineKeyboardButton(
         text=f"◇ {c}  ·  {n}",
-        callback_data=f"pick:{c}"
+        callback_data=f"pick:{country_key(c)}"
     )] for c, n in page_rows]
 
     nav = []
@@ -671,7 +706,7 @@ async def cb_pick_country(callback: CallbackQuery):
     user = callback.from_user
     await upsert_user(user)
     uid = user.id
-    country = callback.data.split(":", 1)[1]
+    token = callback.data.split(":", 1)[1]
     now = int(time.time())
 
     async with aiosqlite.connect(DB_NAME) as db:
@@ -688,6 +723,10 @@ async def cb_pick_country(callback: CallbackQuery):
                 f"↻ Available in {wait}s. Please wait before generating again.",
                 alert=True
             )
+
+        country = await resolve_country(db, token)
+        if country is None:
+            return await safe_answer(callback, "No stock remains for this country.", alert=True)
 
         await db.execute("BEGIN IMMEDIATE")
         async with db.execute(

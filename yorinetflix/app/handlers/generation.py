@@ -53,8 +53,11 @@ def register(dp: Dispatcher, settings: Settings):
         if not user:
             return await safe_answer(callback)
 
-        country = callback.data.split(":", 1)[1].strip()
-        if not country:
+        # The button carries a short country key (Telegram caps callback_data
+        # at 64 bytes, which real country names can exceed); it is resolved to
+        # the actual country name below, once a connection is available.
+        token = callback.data.split(":", 1)[1].strip()
+        if not token:
             return await safe_answer(
                 callback, "↻ This menu is out of date. Open Generate again.", True
             )
@@ -87,7 +90,12 @@ def register(dp: Dispatcher, settings: Settings):
                         callback, "Your daily limit has been reached. Try again tomorrow.", True
                     )
 
-                # Pick an account atomically
+                # Resolve the key to a stocked country, then pick atomically
+                country = await inventory.resolve_country(conn, token)
+                if country is None:
+                    return await safe_answer(
+                        callback, "No stock remains for this country.", True
+                    )
                 cookie = await inventory.pick_account(conn, country)
                 if cookie is None:
                     return await safe_answer(

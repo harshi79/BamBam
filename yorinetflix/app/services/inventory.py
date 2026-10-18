@@ -60,6 +60,38 @@ def parse_bulk_cookies(text: str) -> list[dict]:
     return [parse_cookie_text(text)] if text.strip() else []
 
 
+# ── Country keys (Telegram callback payloads) ──────────────────
+
+# Telegram caps InlineKeyboardButton.callback_data at 64 *bytes*.  Country
+# buttons used to carry the raw country name ("pick:United States"), so any
+# country whose name did not fit — long names, flag emojis, non-Latin scripts
+# (every such character is 2–4 bytes) — made Telegram reject the whole
+# keyboard with BUTTON_DATA_INVALID.  Buttons now carry a short fixed-size key
+# that is resolved back to the exact country name when pressed.
+COUNTRY_KEY_LEN = 16  # hex chars → "pick:" + 16 = 21 bytes, always within 64
+
+
+def country_key(country: str) -> str:
+    """Short, stable, Telegram-safe identifier for a country name."""
+    return hashlib.sha256(country.encode("utf-8")).hexdigest()[:COUNTRY_KEY_LEN]
+
+
+async def resolve_country(conn: asyncpg.Connection, token: str) -> Optional[str]:
+    """Map a ``pick:`` payload back to the stocked country it refers to.
+
+    Accepts the country key used by current keyboards, and — so that country
+    lists sent by earlier builds keep working — the raw country name used by
+    older keyboards.  Returns None when no such country is in stock.
+    """
+    countries = [r["country"] for r in await inventory_repo.get_country_stock(conn)]
+    for country in countries:
+        if country_key(country) == token:
+            return country
+    if token in countries:  # legacy keyboard: raw country name
+        return token
+    return None
+
+
 # ── Database Operations ────────────────────────────────────────
 
 
