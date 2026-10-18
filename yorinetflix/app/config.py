@@ -50,8 +50,8 @@ class Settings(BaseSettings):
 
     # ── Optional: Force Subscription ────────────────────────────
     FORCE_CHANNEL: str = ""
-    """Channel username (without @) for force-subscription checks.
-    Empty string disables FSUB."""
+    """Channel username (without @) or numeric chat ID for force-subscription.
+    Use the numeric -100… ID for private channels. Empty disables FSUB."""
 
     FORCE_CHANNEL_URL: str = ""
     """Invite link shown in the Join Channel button.
